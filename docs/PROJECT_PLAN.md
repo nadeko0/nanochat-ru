@@ -13,30 +13,38 @@ reason.
 
 - [x] A1. VRAM probe (d5-d8) — see docs/RESEARCH_LOG.md 2026-08-10 entry.
       Result: d5=batch8, d6=batch13, d7=batch6, d8=batch6, all fit in 15GB.
-- [x] A2. Decided: `d6` (73.53M, ratio=20, `--device-batch-size=13`,
-      ~4.3h) over `d4v2` — see docs/RESEARCH_LOG.md 2026-08-10 entry for why.
-- [ ] A3. Run the chosen main pretrain to completion.
+- [x] A2. Decided: `d6` (73.53M, ratio=20, `--device-batch-size=8` --
+      corrected from an initial 12/13, see the "Bug (again)" entry in
+      RESEARCH_LOG.md -- ~4.3h) over `d4v2`.
+- [x] A2.5. Repetition-loop fix: added `repetition_penalty` +
+      `no_repeat_ngram_size` to `Engine.generate()` (CTRL-style penalty +
+      HF-style n-gram blocking, ported not invented -- see CHANGELOG.md and
+      the RESEARCH_LOG.md "Fixing the repetition loops" entry). Verified
+      locally: stopped the observed looping across every seed tried so far
+      (small spot-check, not yet the formal metric in A5).
+- [ ] A3. Run the chosen main pretrain (`d6`) to completion. **In progress.**
 - [ ] A4. SFT on the resulting checkpoint.
 - [ ] A5. Automated repetition-loop metric (not eyeballing transcripts) —
-      compare old `d4` vs the new run objectively.
+      compare old `d4` vs the new run objectively, and re-validate the A2.5
+      fix with real numbers instead of a 4-seed spot-check.
 - [ ] A6. `chat_eval.py` — formal ARC/MMLU/GSM8K/HumanEval numbers, for
       completeness (expected to be near-baseline at this scale, run anyway).
 - [ ] A7. `chat_rl.py` — RL pass, low expectation, log the actual result
       either way.
 - [ ] A8. Consolidate: side-by-side comparison of all English variants tried
-      (`d4`, and whichever of `d4v2`/`d5`/`d6`/`d7`/`d8` got run) in README +
-      RESEARCH_LOG.md, pick a final English model.
+      (`d4`, `d6`, and anything from A9/A10) in README + RESEARCH_LOG.md,
+      pick a final English model.
+- [ ] A9. Smaller `--vocab-size` experiment: at `d4`, embeddings are ~46% of
+      total params (32768 vocab). Retrain tokenizer at e.g. 8192-16384 and
+      compare — does reallocating that budget to transformer capacity help
+      at this scale?
+- [ ] A10. Different `--aspect-ratio` (model_dim = depth * aspect_ratio,
+      default 64, tuned by upstream for much bigger models): try narrower/
+      deeper or wider/shallower at a fixed param budget, compare.
 
 ### A-optional (stretch, only if there's budget left)
 
-- [ ] A-opt-1. Smaller `--vocab-size` experiment: at `d4`, embeddings are
-      ~46% of total params (32768 vocab). Retrain tokenizer at e.g. 8192-16384
-      and compare — does reallocating that budget to transformer capacity
-      help at this scale?
-- [ ] A-opt-2. Different `--aspect-ratio` (model_dim = depth * aspect_ratio,
-      default 64, tuned by upstream for much bigger models): try narrower/
-      deeper or wider/shallower at a fixed param budget, compare.
-- [ ] A-opt-3. Tied `wte`/`lm_head` experiment (see RESEARCH_LOG.md open
+- [ ] A-opt-1. Tied `wte`/`lm_head` experiment (see RESEARCH_LOG.md open
       items) — upstream deliberately keeps them untied; unclear if that's
       right at our scale.
 
@@ -69,5 +77,5 @@ reason.
 
 ---
 
-Progress snapshot: as of 2026-08-10, Phase A is at A1 done / A2 pending a
-decision; Phases B and C not started (deliberately deferred).
+Progress snapshot: as of 2026-08-10, Phase A: A1/A2/A2.5 done, A3 (`d6`
+pretrain) running; Phases B and C not started (deliberately deferred).

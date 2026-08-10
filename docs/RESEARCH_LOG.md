@@ -233,6 +233,26 @@ entry above), confirmed to fit in VRAM with room to spare, and cheaper in
 wall-clock (~4.3h estimated) than the `d4v2` alternative (~5.3h) while
 carrying meaningfully more model capacity (73.53M vs 36.7M).
 
+### Bug (again): device_batch_size not compatible with the auto-computed total_batch_size
+
+First launch attempt of `d6` crashed immediately:
+`total_batch_size (262144) must be a multiple of 49152`. Same class of bug
+as the earlier `SMOKE_TEST` failure (`total_batch_size` must be a multiple
+of `device_batch_size * max_seq_len * world_size`), just triggered
+differently: this time `--target-param-data-ratio=20` auto-computed
+`total_batch_size=262144` (nanochat's own muP-style-tuned value, not
+something we set), and the VRAM probe's answer of 12/13 for `--device-batch-size`
+doesn't divide into it evenly (`12*2048*2=49152`, and `262144/49152` isn't
+an integer). `d4`'s original run got lucky here: its `--device-batch-size=16`
+happens to divide the same auto-computed 262144 cleanly.
+
+The general rule (worth remembering going forward, not just for `d6`):
+`device_batch_size` must divide `total_batch_size / (max_seq_len *
+world_size)` = `262144 / 4096` = `64`, when `total_batch_size` is left on
+`auto`. Fixed by dropping to `--device-batch-size=8` (divides 64 cleanly,
+still comfortably under the VRAM probe's verified-safe ceiling of 13) rather
+than overriding `--total-batch-size` away from nanochat's own tuned value.
+
 ## 2026-08-10 -- Fixing the repetition loops (a decoding problem, not (only) a training one)
 
 The "friend's friend's friend's..." loop above is a known, well-studied failure

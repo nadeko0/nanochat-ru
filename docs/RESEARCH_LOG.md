@@ -157,8 +157,81 @@ estimated 22-26GiB -- would not fit in a T4's 15GiB at
 [accelerate's `find_executable_batch_size`](https://github.com/huggingface/accelerate/blob/main/src/accelerate/utils/memory.py),
 not a hand-rolled retry loop, to correctly handle OOM-retry edge cases like
 CUDA cache fragmentation between attempts) to check this cheaply (a couple of
-minutes per depth) before ever committing hours to a `d5`/`d6` run. Results:
-not yet run -- to be logged here once available.
+minutes per depth) before ever committing hours to a `d5`/`d6` run.
+
+## 2026-08-10 -- VRAM probe results (d5-d8) and why they're not perfectly clean
+
+### How it was tested
+
+`kaggle/vram_probe.py` builds the *real* `GPT` model and the *real*
+Muon/AdamW optimizer (`model.setup_optimizer(...)`, same call `base_train.py`
+makes) for a given `--depth`, `torch.compile`s it, and runs 3 forward/
+backward/`optimizer.step()` iterations on random token batches at
+decreasing batch sizes. It reuses the real code paths on purpose, rather
+than a from-scratch memory estimate, because activation memory, optimizer
+state size, and what `torch.compile` decides to keep around are all easy to
+get subtly wrong by hand-calculating.
+
+Tested on a single GPU (`CUDA_VISIBLE_DEVICES=0`), not under `torchrun
+--nproc_per_node=2` like real training. This is deliberate, not a shortcut
+that loses accuracy: DDP gives each GPU its own full copy of the model and
+optimizer state, so per-GPU memory depends only on the local (per-device)
+batch size, not on how many GPUs are in the job. One GPU's answer is the
+same answer `torchrun` would give per GPU, for a fraction of the setup cost.
+
+The actual search is `accelerate.utils.find_executable_batch_size` (not a
+hand-rolled loop): start at `--starting-batch-size` (32 here), and on a CUDA
+OOM, clear the cache, `gc.collect()`, multiply the batch size by 0.9, and
+retry -- returns the first batch size that completes without OOM.
+
+### Results
+
+| depth | model_dim | max working `--device-batch-size` | peak memory |
+|---|---|---|---|
+| 5 | 384 | 8 | 11,465 MiB / 14,912 MiB |
+| 6 | 384 | 13 | 11,667 MiB / 14,912 MiB |
+| 7 | 512 | 6 | 10,889 MiB / 14,912 MiB |
+| 8 | 512 | 6 | 11,371 MiB / 14,912 MiB |
+
+All four fit on a T4 (15GB). `d7`/`d8` (wider, `model_dim=512`) landing on a
+smaller batch (6) than `d5`/`d6` (`model_dim=384`) is the expected direction
+-- more memory per sample at a wider model.
+
+### The d5-vs-d6 anomaly, and why it's a property of the search, not the model
+
+`d5` and `d6` share the same `model_dim=384` (aspect_ratio rounding puts
+both at the same width tier -- `d6` just has one more transformer layer).
+More layers should need *more* memory per batch element, not less, so `d6`
+finding a *larger* working batch (13) than `d5` (8) looks backwards at
+first glance.
+
+Likely explanation: `find_executable_batch_size` runs its whole search
+*within one process*. Each OOM triggers `torch.cuda.empty_cache()` +
+`gc.collect()`, which releases cached-but-unused memory back to the driver,
+but doesn't defragment the memory that's still in use. If `d5`'s search
+happened to hit an OOM at a batch size where the resulting retries landed
+in a more fragmented allocator state, its final "working" answer can come
+out lower than the model's *true* ceiling would allow in a fresh process --
+which is consistent with `d5`'s peak memory (11,465 MiB) being lower than
+`d6`'s (11,667 MiB) despite `d5` being the smaller model: if `d5` truly
+maxed out around 11.5GB the way `d6` maxes out around 11.7GB, its real
+ceiling batch size should have been higher than 8, not lower than `d6`'s 13.
+
+Practical takeaway: treat these numbers as **safe, verified-working lower
+bounds**, not exact ceilings -- correct to plan a training run around (won't
+OOM), but `d5` in particular likely has more headroom than 8 if it were
+re-probed in a clean process or verified directly in a real `torchrun`
+launch. Not going to chase the exact true ceiling further -- diminishing
+returns for a hobby-project GPU-hours budget.
+
+### Decision
+
+Chosen `d6` (73.53M params) over the originally-planned `d4v2` path: same
+compute-optimal `--target-param-data-ratio=20` used for the first `d4` run
+(more principled than deliberately overtraining a fixed small model, see the
+entry above), confirmed to fit in VRAM with room to spare, and cheaper in
+wall-clock (~4.3h estimated) than the `d4v2` alternative (~5.3h) while
+carrying meaningfully more model capacity (73.53M vs 36.7M).
 
 ## 2026-08-10 -- Fixing the repetition loops (a decoding problem, not (only) a training one)
 
@@ -186,12 +259,11 @@ transcripts.
 
 ## Open questions / next up
 
-- VRAM probe results for d5-d8 (not run yet).
-- d4v2 pretrain + SFT results (running).
+- `d6` pretrain (ratio=20, ~4.3h estimated) + SFT results -- decided against
+  `d4v2` (see the VRAM probe entry above for why), not started yet.
 - Build an automated repetition-loop metric (e.g. max repeated n-gram length
   over a fixed prompt set) to replace eyeballing transcripts -- would let
-  `d4` vs `d4v2` vs (if pursued) `d5`/`d6` be compared objectively instead of
-  anecdotally.
+  `d4` vs `d6` be compared objectively instead of anecdotally.
 - Consider a tied-embeddings experiment (`wte`==`lm_head`): at `d4`,
   embeddings are ~46% of total params (untied by upstream design, see
   `nanochat/gpt.py` docstring "untied weights for token embedding and lm_head").

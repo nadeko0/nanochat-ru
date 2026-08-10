@@ -13,9 +13,8 @@ reason.
 
 - [x] A1. VRAM probe (d5-d8) — see docs/RESEARCH_LOG.md 2026-08-10 entry.
       Result: d5=batch8, d6=batch13, d7=batch6, d8=batch6, all fit in 15GB.
-- [ ] A2. **Decision needed**: which architecture to push further —
-      leaning `d6` (73.53M, ratio=20, ~4.3h) over the originally-planned
-      `d4v2` (36.7M, ratio=100, ~5.3h) given the probe results, not yet confirmed.
+- [x] A2. Decided: `d6` (73.53M, ratio=20, `--device-batch-size=13`,
+      ~4.3h) over `d4v2` — see docs/RESEARCH_LOG.md 2026-08-10 entry for why.
 - [ ] A3. Run the chosen main pretrain to completion.
 - [ ] A4. SFT on the resulting checkpoint.
 - [ ] A5. Automated repetition-loop metric (not eyeballing transcripts) —

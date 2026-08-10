@@ -1,0 +1,38 @@
+.venv/
+__pycache__/
+*.pyc
+dev-ignore/
+report.md
+eval_bundle/
+
+# Secrets
+.env
+rclone.conf
+**/rclone.conf
+*service-account*.json
+*credentials*.json
+kaggle.json
+
+# Local setup
+CLAUDE.md
+wandb/
+
+# Model weights, checkpoints, datasets, tokenizer artifacts (kept on Google Drive, not in git)
+*.pt
+*.pth
+*.bin
+*.safetensors
+checkpoints/
+*.ckpt
+data/
+datasets/
+*.parquet
+*.tar
+*.tar.gz
+
+# Notebook execution output/checkpoints
+.ipynb_checkpoints/
+*_output.ipynb
+
+# Local cache mirroring ~/.cache/nanochat if ever redirected into repo
+.cache/

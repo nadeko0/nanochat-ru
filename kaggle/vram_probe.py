@@ -16,6 +16,14 @@ Usage:
     python kaggle/vram_probe.py --depth=5 --max-seq-len=2048 --starting-batch-size=32
 """
 import argparse
+import os
+import sys
+
+# Running this as `python kaggle/vram_probe.py` (not `python -m ...`) puts this file's own
+# directory (kaggle/) on sys.path[0], not the repo root -- so the nanochat/ package next to
+# it wouldn't otherwise be importable. Add the repo root explicitly.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import torch
 
 from nanochat.gpt import GPT, GPTConfig

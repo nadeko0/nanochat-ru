@@ -23,9 +23,10 @@ authenticated as you, writing files that you own, against your own 5TB
 quota. The real trade-off: it has access to your whole Drive (`scope=drive`),
 not just one folder. There's no way to scope a personal-account OAuth token
 down to a single folder the way a service account key can be scoped by
-sharing -- so treat the Kaggle Secret holding it like you would any credential
-with full Drive access, and revoke/re-authorize it (Google Account ->
-Security -> Third-party access) if you ever suspect it leaked.
+sharing -- so treat the credentials in Kaggle Secrets like you would any
+credential with full Drive access, and revoke/re-authorize them (Google
+Account -> Security -> Third-party access) if you ever suspect they leaked
+(e.g. pasted somewhere they shouldn't have been).
 
 ## 1. Generate the OAuth remote locally
 
@@ -44,28 +45,33 @@ rclone config
 # "Use auto config?" -> yes -- this opens a browser to log in and authorize
 ```
 
-This produces a `[gdrive]` section in your local `rclone.conf` with
-`client_id`, `client_secret`, `scope`, and a `token` (containing
+This produces a `[gdrive]` section in your local `rclone.conf` with these
+fields: `client_id`, `client_secret`, and a `token` (a JSON blob containing
 `access_token` + `refresh_token`). rclone auto-refreshes the access token
 using the refresh token, so this keeps working across many Kaggle sessions
-without re-authorizing -- as long as you don't revoke access.
+without re-authorizing, as long as you don't revoke access.
 
 ## 2. Create a Drive folder for checkpoints
 
 In Google Drive, create a folder (e.g. `nanochat-checkpoints`) and copy its
 ID from the URL: `https://drive.google.com/drive/folders/<FOLDER_ID>`.
 
-## 3. Store as Kaggle Secrets
+## 3. Store as Kaggle Secrets -- four separate single-line values
 
-In the Kaggle notebook editor: Add-ons -> Secrets.
+In the Kaggle notebook editor: Add-ons -> Secrets. Kaggle's Secrets box is a
+single-line field: pasting a multi-line `rclone.conf` snippet into one
+secret loses the newlines and everything gets mangled into one broken line.
+Use four separate secrets instead, each just the bare value (no `key =`
+prefix):
 
-1. `GDRIVE_OAUTH_CONF` -- from your local `rclone.conf`'s `[gdrive]` section,
-   copy just the `client_id`, `client_secret`, and `token` lines (3 lines) as
-   the secret value. Don't include `type =` or `scope =` -- the notebook adds
-   those itself.
-2. `GDRIVE_FOLDER_ID` -- the folder ID from step 2.
+| Secret name | Value (from your local `rclone.conf`'s `[gdrive]` section) |
+|---|---|
+| `GDRIVE_CLIENT_ID` | the `client_id` value |
+| `GDRIVE_CLIENT_SECRET` | the `client_secret` value |
+| `GDRIVE_OAUTH_TOKEN` | the whole `token` value -- the `{"access_token":...}` JSON blob (already single-line, safe to paste as-is) |
+| `GDRIVE_FOLDER_ID` | the folder ID from step 2 |
 
-Attach both to the notebook (toggle "Attached") before running it.
+Attach all four to the notebook (toggle "Attached") before running it.
 
 Never commit `rclone.conf` or these values to git -- both are excluded in
 `.gitignore` (`rclone.conf`, `*credentials*.json`).
@@ -78,7 +84,9 @@ cat > ~/.config/rclone/rclone.conf <<EOF
 [gdrive]
 type = drive
 scope = drive
-<contents of GDRIVE_OAUTH_CONF secret>
+client_id = <GDRIVE_CLIENT_ID secret>
+client_secret = <GDRIVE_CLIENT_SECRET secret>
+token = <GDRIVE_OAUTH_TOKEN secret>
 root_folder_id = <GDRIVE_FOLDER_ID secret>
 team_drive =
 EOF

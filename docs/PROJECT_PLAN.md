@@ -29,6 +29,14 @@ reason.
       fix with real numbers instead of a 4-seed spot-check.
 - [ ] A6. `chat_eval.py` — formal ARC/MMLU/GSM8K/HumanEval numbers, for
       completeness (expected to be near-baseline at this scale, run anyway).
+- [ ] A6.5. BLiMP-style grammar eval ([Warstadt et al. 2020](https://arxiv.org/abs/1912.00582)):
+      67 categories of minimal-pair sentences (one grammatical, one with a
+      single grammatical violation -- agreement, tense, negation, etc.),
+      score by which sentence the model assigns higher probability to. No
+      fine-tuning needed (reuses the existing bpb-style forward pass, low
+      effort) -- and unlike MMLU/GSM8K, actually tests something this model's
+      scale can plausibly do well on (grammar), not just knowledge/reasoning
+      it can't.
 - [ ] A7. `chat_rl.py` — RL pass, low expectation, log the actual result
       either way.
 - [ ] A8. Consolidate: side-by-side comparison of all English variants tried

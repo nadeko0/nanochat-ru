@@ -160,10 +160,44 @@ CUDA cache fragmentation between attempts) to check this cheaply (a couple of
 minutes per depth) before ever committing hours to a `d5`/`d6` run. Results:
 not yet run -- to be logged here once available.
 
+## 2026-08-10 -- Fixing the repetition loops (a decoding problem, not (only) a training one)
+
+The "friend's friend's friend's..." loop above is a known, well-studied failure
+mode of small/undertrained LMs under naive sampling, not something specific to
+nanochat. Rather than guess at a fix, looked for the standard, battle-tested
+approach: HuggingFace `transformers`' `repetition_penalty` (CTRL-style,
+[Keskar et al. 2019](https://arxiv.org/abs/1909.05858)) and
+`no_repeat_ngram_size` (classic seq2seq/beam-search n-gram blocking). nanochat's
+`Engine.generate()` had neither -- only temperature + top_k.
+
+Ported both algorithms into `nanochat/engine.py` (see CHANGELOG.md) -- the
+first deviation from "unmodified vendored code" in this project, done
+deliberately and logged, not silently. Defaulted `chat_cli.py` to
+`repetition_penalty=1.2, no_repeat_ngram_size=3` (values referenced as a
+common real-world combination in HF's own docs).
+
+**Result** (local CPU, `d4` SFT checkpoint, prompt "hi", 4 different seeds):
+all 4 produced coherent, loop-free (if sometimes off-topic/rambling) text.
+The same checkpoint had produced a 256-token "friend's" loop on at least one
+seed before this change. Caveat: this is a small spot-check (4 seeds, 1
+prompt), not a systematic before/after comparison -- see the open item below
+about building an actual repetition-rate metric instead of eyeballing
+transcripts.
+
 ## Open questions / next up
 
 - VRAM probe results for d5-d8 (not run yet).
 - d4v2 pretrain + SFT results (running).
+- Build an automated repetition-loop metric (e.g. max repeated n-gram length
+  over a fixed prompt set) to replace eyeballing transcripts -- would let
+  `d4` vs `d4v2` vs (if pursued) `d5`/`d6` be compared objectively instead of
+  anecdotally.
+- Consider a tied-embeddings experiment (`wte`==`lm_head`): at `d4`,
+  embeddings are ~46% of total params (untied by upstream design, see
+  `nanochat/gpt.py` docstring "untied weights for token embedding and lm_head").
+  Tying them would free ~8.4M params' worth of budget at this depth -- unclear
+  if that's better spent as more transformer capacity or just makes the
+  embedding table itself weaker. Not started.
 - Whether `chat_rl.py` (RL stage) is worth trying at this scale -- expectation
   going in is low (RL tends to sharpen existing capability more than create
   it), will log the actual result either way.

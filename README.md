@@ -3,50 +3,59 @@
 A small (20-50M parameter) chat LLM, trained from scratch, first in English then
 adapted to Russian. **Based on [karpathy/nanochat](https://github.com/karpathy/nanochat)**
 (MIT licensed) — the tokenizer, model, training loop, and evaluation code in
-`nanochat/`, `scripts/`, and `tasks/` are the vendored upstream source,
-largely unmodified. The upstream README is kept at
+`nanochat/`, `scripts/`, and `tasks/` are the vendored upstream source, with a
+small number of deliberate, logged modifications (see
+[CHANGELOG.md](CHANGELOG.md)). The upstream README is kept at
 [docs/UPSTREAM_NANOCHAT_README.md](docs/UPSTREAM_NANOCHAT_README.md) for
 reference.
 
-This is a personal learning project, not a research contribution: the goal is
-to run the full nanochat pipeline (tokenize -> pretrain -> SFT -> chat) end to
-end on free-tier hardware, at a scale small enough to fit that hardware, and
-then repeat it for Russian.
+This is a personal learning/research project, not a production system: the
+goal is to run the full nanochat pipeline (tokenize -> pretrain -> SFT ->
+chat) end to end on free-tier hardware, at a scale small enough to fit that
+hardware, understand every layer of it, and repeat it for Russian. See
+[docs/RESEARCH_LOG.md](docs/RESEARCH_LOG.md) for the full, honest experiment
+log — including dead ends and things that didn't work — and
+[CHANGELOG.md](CHANGELOG.md) for what changed in the repo and when.
 
-## Status
+## Status (see CHANGELOG.md for exact dates/details)
 
-- **Pretraining: done.** `d4` (36.7M params) trained from scratch on Kaggle
-  T4 x2, 880 steps / 230.7M tokens (`--target-param-data-ratio=20`), 64.1
-  minutes wall-clock, peak memory 11.16GiB/15GiB. **Minimum validation bpb:
-  1.0994** (started at 3.85 on a random init). Checkpoint + tokenizer live
-  on Google Drive and were pulled down and run locally on CPU as a sanity
-  check — the raw base model produces grammatical (if repetitive) English
-  completions, e.g. prompted with "Once upon a time": *"...in a beautiful
-  city filled with beauty, love, and love... Step 1: Gather Materials..."*.
-  Expected at this scale: it has no SFT yet, so it completes text rather
-  than answering questions.
-- **SFT: not run yet.** `kaggle/kaggle_sft.ipynb` is ready (base model +
-  SmolTalk conversation data, MMLU/GSM8K skipped as pointless at this
-  scale, capped at 500 steps per session since `chat_sft.py` only
-  checkpoints at the end of a run, not periodically).
-- **Phase 2 (Russian): not started.**
+- **`d4` (36.7M params, ratio=20/Chinchilla-optimal): pretrain + SFT done.**
+  880 pretrain steps / 230.7M tokens, min val_bpb 1.0994. SFT: 1 SmolTalk
+  epoch, min val_bpb 0.6616. Chat quality is real but inconsistent — coherent
+  on many prompts, degenerates into repetition loops on others. Checkpoint +
+  full-output run notebooks: [kaggle/runs/](kaggle/runs/).
+- **Repetition-loop fix**: added `repetition_penalty` +
+  `no_repeat_ngram_size` to `Engine.generate()` (standard techniques, ported
+  not invented — see CHANGELOG). Verified locally: stopped the observed
+  looping across every test seed tried so far.
+- **`d4v2` (same architecture, ratio=100, ~1.15B tokens): in progress.**
+  "Overtraining" past the compute-optimal point for better quality, the way
+  real small deployed models (Qwen, Llama) do — see RESEARCH_LOG.md for why.
+- **VRAM probe tool ready** (`kaggle/kaggle_vram_probe.ipynb`) to check
+  whether `d5`/`d6` (71-73M params, next size tier) fit on a T4 before
+  committing hours to a run.
+- **Phase 2 (Russian): deferred** until the English side is judged "done
+  enough" within the free-tier compute budget.
 
 Training happens manually on Kaggle, in bursts bounded by Kaggle's 12h
-session limit and ~30 GPU-hours/week free quota. This README will be kept
-updated as each phase completes.
+session limit and ~30 GPU-hours/week free quota, checkpoints synced
+continuously to Google Drive so a killed session never loses much progress.
 
 ## What's different from upstream nanochat
 
 | | upstream nanochat | this fork |
 |---|---|---|
-| Model size | `--depth=20`..`26` (GPT-2 grade, ~560M-1.9B params) | `--depth=4` (~36.7M params) |
+| Model size | `--depth=20`..`26` (GPT-2 grade, ~560M-1.9B params) | `--depth=4` (~36.7M params), experimenting with `d4` at higher token ratios and possibly `d5`/`d6` |
 | Hardware | 8x H100 node | Kaggle T4 x2 (free tier) |
 | Session length | single long-running job | resumable across many <=12h sessions |
 | Checkpoint storage | local disk | synced continuously to Google Drive via rclone |
 | Language | English (ClimbMix) | English first, then a Russian corpus (phase 2) |
+| `Engine.generate()` | temperature + top_k only | + `repetition_penalty` + `no_repeat_ngram_size` (see CHANGELOG.md) |
 
 Everything else — model architecture, tokenizer (rustbpe), training loop,
-optimizer, evaluation harness — is unmodified nanochat code.
+optimizer, evaluation harness — is unmodified nanochat code. Every deviation
+from vendored upstream code is logged in [CHANGELOG.md](CHANGELOG.md), not
+made silently.
 
 ### Why `--depth=4`
 
@@ -138,19 +147,26 @@ Both computed separately for the English and Russian phases once each
 finishes training. Numbers will be added here (not in a separate leaderboard
 doc, given the small scope of this project) once available.
 
-### English pretrain results (d4, 2026-08-10)
+### English results (d4, 2026-08-10)
 
-| metric | value |
-|---|---|
-| depth / params | 4 / 36.70M |
-| training tokens | 230,686,720 (880 steps, `--target-param-data-ratio=20`) |
-| hardware | Kaggle T4 x2, ~64.1 min wall-clock |
-| peak memory | 11.16GiB / 15GiB |
-| min validation bpb | 1.0994 (from 3.85 at random init) |
+| stage | metric | value |
+|---|---|---|
+| pretrain | depth / params | 4 / 36.70M |
+| pretrain | training tokens | 230,686,720 (880 steps, `--target-param-data-ratio=20`) |
+| pretrain | hardware | Kaggle T4 x2, ~64.1 min wall-clock |
+| pretrain | peak memory | 11.16GiB / 15GiB |
+| pretrain | min validation bpb | 1.0994 (from 3.85 at random init), on ClimbMix val shard |
+| SFT | data | 1 epoch SmolTalk (460,341 rows), 125 steps (dataset exhausted before the 500-step cap) |
+| SFT | hardware | Kaggle T4 x2, 8.3 min wall-clock |
+| SFT | min validation bpb | 0.6616, on held-out SmolTalk/MMLU/GSM8K mixture |
 
-SFT and a proper narrow-eval (val_bpb on held-out SmolTalk/chat data) are
-still pending — the number above is base-pretrain-only bpb on the ClimbMix
-validation shard.
+Chat quality is genuinely mixed, logged honestly in
+[docs/RESEARCH_LOG.md](docs/RESEARCH_LOG.md) rather than cherry-picked: some
+prompts get a coherent, on-topic reply, others degenerate into repetition
+loops (fixed since, see CHANGELOG.md for the `repetition_penalty` /
+`no_repeat_ngram_size` addition — not yet re-measured with a formal metric,
+only spot-checked). `d4v2` (more pretraining data) is in progress to see if
+it improves consistency further.
 
 ## License
 

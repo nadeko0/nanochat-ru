@@ -156,6 +156,39 @@ def sample_next_token(logits, rng, temperature=1.0, top_k=None):
         return torch.multinomial(probs, num_samples=1, generator=rng)
 
 # -----------------------------------------------------------------------------
+def apply_repetition_controls(logits, row_states, repetition_penalty=1.0, no_repeat_ngram_size=0):
+    """
+    Per-row repetition controls applied to logits before sampling, standard techniques
+    from decoder-only LM generation (not something invented for this project):
+    - repetition_penalty: CTRL-style penalty (Keskar et al. 2019 "CTRL: A Conditional
+      Transformer Language Model for Controllable Generation"; same algorithm used by
+      HuggingFace transformers' `repetition_penalty` generation param). >1.0 discourages
+      repeating already-generated tokens: positive logits are divided by the penalty,
+      negative logits multiplied by it, so the token becomes less likely either way. 1.0 = no-op.
+    - no_repeat_ngram_size: hard-blocks any n-gram that already occurred verbatim in this
+      row's history (same behavior as HF transformers' `no_repeat_ngram_size`, from
+      classic seq2seq/beam-search decoding). 0 = disabled. Small n (e.g. 3) stops literal
+      loops ("friend's friend's friend's...") without banning individual common words.
+    """
+    if repetition_penalty == 1.0 and no_repeat_ngram_size <= 0:
+        return logits
+    logits = logits.clone()
+    for i, state in enumerate(row_states):
+        history = state.current_tokens
+        if repetition_penalty != 1.0 and history:
+            seen_idx = torch.tensor(sorted(set(history)), device=logits.device, dtype=torch.long)
+            vals = logits[i, seen_idx]
+            logits[i, seen_idx] = torch.where(vals > 0, vals / repetition_penalty, vals * repetition_penalty)
+        if no_repeat_ngram_size > 0 and len(history) >= no_repeat_ngram_size - 1:
+            n = no_repeat_ngram_size
+            prefix = tuple(history[-(n - 1):]) if n > 1 else ()
+            banned = {history[j + n - 1] for j in range(len(history) - n + 1) if tuple(history[j:j + n - 1]) == prefix}
+            if banned:
+                banned_idx = torch.tensor(sorted(banned), device=logits.device, dtype=torch.long)
+                logits[i, banned_idx] = float("-inf")
+    return logits
+
+# -----------------------------------------------------------------------------
 
 class RowState:
     # Per-row state tracking during generation
@@ -173,7 +206,8 @@ class Engine:
         self.tokenizer = tokenizer # needed for tool use
 
     @torch.inference_mode()
-    def generate(self, tokens, num_samples=1, max_tokens=None, temperature=1.0, top_k=None, seed=42):
+    def generate(self, tokens, num_samples=1, max_tokens=None, temperature=1.0, top_k=None, seed=42,
+                 repetition_penalty=1.2, no_repeat_ngram_size=3):
         """Same as generate, but does single prefill and then clones the KV cache."""
         assert isinstance(tokens, list) and isinstance(tokens[0], int), "expecting list of ints"
         device = self.model.get_device()
@@ -231,6 +265,7 @@ class Engine:
                 break
 
             # Sample the next token for each row
+            logits = apply_repetition_controls(logits, row_states, repetition_penalty, no_repeat_ngram_size)
             next_ids = sample_next_token(logits, rng, temperature, top_k)  # (B, 1)
             sampled_tokens = next_ids[:, 0].tolist()
 

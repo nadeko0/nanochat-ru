@@ -67,9 +67,11 @@ copied in by hand from [kaggle/kaggle_train.ipynb](kaggle/kaggle_train.ipynb).
    cells for what each one does — clone + deps, Drive auth + resume
    detection, optional dataset caching, training with a background Drive
    sync watcher, final sync).
-3. **Google Drive** (5TB, via `rclone` + a service account scoped to one
-   shared folder — see [docs/RCLONE_GDRIVE_SETUP.md](docs/RCLONE_GDRIVE_SETUP.md))
-   holds the source of truth for checkpoints, so a session dying at any
+3. **Google Drive** (5TB, via `rclone` with a personal OAuth remote — see
+   [docs/RCLONE_GDRIVE_SETUP.md](docs/RCLONE_GDRIVE_SETUP.md) for why a
+   service account doesn't work here: on a personal, non-Workspace Google
+   account it has no storage quota of its own and can't write into a shared
+   folder) holds the source of truth for checkpoints, so a session dying at any
    point (not just the 12h limit) loses at most one `--save-every` interval
    of progress, and the next session picks up where it left off.
 4. Logs/metrics pulled back from Kaggle/Drive are committed to git by hand

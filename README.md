@@ -15,12 +15,25 @@ then repeat it for Russian.
 
 ## Status
 
-Phase 1 (English pretrain + SFT) is scaffolded but has not been run to
-completion yet — training happens manually on Kaggle, in bursts bounded by
-Kaggle's 12h session limit and ~30 GPU-hours/week free quota. This README
-will be updated with real numbers once a full pretrain + SFT + narrow-eval
-pass completes. Until then, treat any specific loss/bpb figures elsewhere in
-this repo as provisional.
+- **Pretraining: done.** `d4` (36.7M params) trained from scratch on Kaggle
+  T4 x2, 880 steps / 230.7M tokens (`--target-param-data-ratio=20`), 64.1
+  minutes wall-clock, peak memory 11.16GiB/15GiB. **Minimum validation bpb:
+  1.0994** (started at 3.85 on a random init). Checkpoint + tokenizer live
+  on Google Drive and were pulled down and run locally on CPU as a sanity
+  check — the raw base model produces grammatical (if repetitive) English
+  completions, e.g. prompted with "Once upon a time": *"...in a beautiful
+  city filled with beauty, love, and love... Step 1: Gather Materials..."*.
+  Expected at this scale: it has no SFT yet, so it completes text rather
+  than answering questions.
+- **SFT: not run yet.** `kaggle/kaggle_sft.ipynb` is ready (base model +
+  SmolTalk conversation data, MMLU/GSM8K skipped as pointless at this
+  scale, capped at 500 steps per session since `chat_sft.py` only
+  checkpoints at the end of a run, not periodically).
+- **Phase 2 (Russian): not started.**
+
+Training happens manually on Kaggle, in bursts bounded by Kaggle's 12h
+session limit and ~30 GPU-hours/week free quota. This README will be kept
+updated as each phase completes.
 
 ## What's different from upstream nanochat
 
@@ -57,16 +70,19 @@ the next width tier (`model_dim=384`) roughly doubles the count.
 
 ## Training workflow
 
-Development happens locally (this git repo); training happens on Kaggle,
-copied in by hand from [kaggle/kaggle_train.ipynb](kaggle/kaggle_train.ipynb).
+Development happens locally (this git repo); training happens on Kaggle, one
+notebook per phase, each uploaded directly (File -> Upload Notebook) rather
+than copied cell by cell:
 
-1. **Local**: edit code, config, or the notebook here; commit to git; push to
+- [kaggle/kaggle_train.ipynb](kaggle/kaggle_train.ipynb) — pretraining. Done for English (see Status).
+- [kaggle/kaggle_sft.ipynb](kaggle/kaggle_sft.ipynb) — SFT, run after pretraining. Not run yet.
+
+1. **Local**: edit code, config, or a notebook here; commit to git; push to
    GitHub.
-2. **Kaggle**: open a new T4 x2 notebook, copy each code cell from
-   `kaggle/kaggle_train.ipynb` in order (see the notebook's own markdown
-   cells for what each one does — clone + deps, Drive auth + resume
-   detection, optional dataset caching, training with a background Drive
-   sync watcher, final sync).
+2. **Kaggle**: open a new T4 x2 notebook, upload the phase's `.ipynb` (see
+   its own markdown cells for what each code cell does — clone + deps, Drive
+   auth + resume detection, training with a background Drive sync watcher,
+   final sync).
 3. **Google Drive** (5TB, via `rclone` with a personal OAuth remote — see
    [docs/RCLONE_GDRIVE_SETUP.md](docs/RCLONE_GDRIVE_SETUP.md) for why a
    service account doesn't work here: on a personal, non-Workspace Google
@@ -96,9 +112,13 @@ completes successfully:
    `karpathy/climbmix-400b-shuffle` parquet shards) for a Russian source —
    candidates to evaluate: `HuggingFaceFW/fineweb-2` (Russian subset),
    `uonlp/CulturaX` (`ru`), or a filtered Common Crawl Russian dump.
-2. Size the corpus with the Chinchilla ratio (~20 tokens/param): for the
-   ~36.7M-param `d4` model, target ~734M training tokens, plus a held-out
-   validation slice.
+2. Size the corpus the same way the English run did:
+   `--target-param-data-ratio=20` with `--depth=4`, which `base_train.py`
+   resolved to 230.7M training tokens (it targets nanochat's own
+   "scaling params" subset — transformer matrices only, excluding
+   embeddings — not the full 36.7M param count naively times 20). Download
+   enough shards to cover that with margin, plus a held-out validation
+   slice.
 3. Retrain the tokenizer (`scripts/tok_train.py`) from scratch on the
    Russian corpus — Cyrillic text needs its own BPE vocab, not a reused
    English one.
@@ -117,6 +137,20 @@ this project reports:
 Both computed separately for the English and Russian phases once each
 finishes training. Numbers will be added here (not in a separate leaderboard
 doc, given the small scope of this project) once available.
+
+### English pretrain results (d4, 2026-08-10)
+
+| metric | value |
+|---|---|
+| depth / params | 4 / 36.70M |
+| training tokens | 230,686,720 (880 steps, `--target-param-data-ratio=20`) |
+| hardware | Kaggle T4 x2, ~64.1 min wall-clock |
+| peak memory | 11.16GiB / 15GiB |
+| min validation bpb | 1.0994 (from 3.85 at random init) |
+
+SFT and a proper narrow-eval (val_bpb on held-out SmolTalk/chat data) are
+still pending — the number above is base-pretrain-only bpb on the ClimbMix
+validation shard.
 
 ## License
 

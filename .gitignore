@@ -32,11 +32,9 @@ datasets/
 
 # Notebook execution output/checkpoints
 .ipynb_checkpoints/
-*_output.ipynb
-# Notebooks downloaded from Kaggle with full run output baked in -- kaggle/*.ipynb are the
-# source of truth (no outputs); these are ad-hoc artifacts pulled down to inspect a run.
-/ai-lab.ipynb
-/*.ipynb
+# Root-level ai-lab*.ipynb are Kaggle's default download filename -- raw drop location before
+# they get moved into kaggle/runs/ (their permanent, clearly-named home, see kaggle/runs/README.md).
+/ai-lab*.ipynb
 
 # Local cache mirroring ~/.cache/nanochat if ever redirected into repo
 .cache/

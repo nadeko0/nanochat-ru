@@ -97,10 +97,13 @@ reason.
 
 ### A-optional (stretch, only if there's budget left)
 
-- [ ] A-opt-1. Tied `wte`/`lm_head` experiment (see RESEARCH_LOG.md open
-      items) — upstream deliberately keeps them untied; unclear if that's
-      right at our scale. Should be sized against `a9`'s budget now (the
-      current leading architecture), not `d4`'s original framing.
+- [x] A-opt-1. **Skipped, deliberately.** Tied `wte`/`lm_head` experiment
+      was the one stretch item on the list; decided not worth the extra
+      cycle after A9/A10 already answered the two questions that mattered
+      for this project (does architecture reallocation help at this scale,
+      and by how much) — this would only refine an already-diminishing-returns
+      corner of the design space. Not a time/cost blocker (would've been
+      cheap on the same rented GPU), just not judged worth doing.
 
 ## Phase B — Russian
 
@@ -132,11 +135,13 @@ reason.
 
 ---
 
-Progress snapshot: as of 2026-08-11, Phase A: A1-A10 all done, A9 done.
-Both architecture experiments ran on a rented Vast.ai RTX 5070 Ti instead
-of Kaggle (~9.6x measured speedup). **A9 is the standout**: clean sweep
-across pretrain bpb (0.956752), SFT bpb (0.612585), CORE (0.0949), BLiMP
-(73.48%), and repetition metric -- best of all four English models on
-every axis measured. A10 won on pretrain bpb/BLiMP but not SFT bpb, a
-more mixed result. Remaining optional item: A-opt-1 (tied embeddings).
-Phases B and C not started (deliberately deferred).
+Progress snapshot: as of 2026-08-11, **Phase A is complete** (A1-A10 and
+A9 done, A-opt-1 explicitly skipped with a reason). Both architecture
+experiments ran on a rented Vast.ai RTX 5070 Ti instead of Kaggle (~9.6x
+measured speedup, ~4h total instance rental across both, well under $1).
+**A9 is the standout**: clean sweep across pretrain bpb (0.956752), SFT
+bpb (0.612585), CORE (0.0949), BLiMP (73.48%), and repetition metric --
+best of all four English models on every axis measured. A10 won on
+pretrain bpb/BLiMP but not SFT bpb, a more mixed result. Phases B
+(Russian) and C (close-out) not started (deliberately deferred) -- these
+are what's actually left on this project.

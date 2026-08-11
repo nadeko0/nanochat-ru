@@ -866,6 +866,22 @@ a more effective lever at this scale than *more depth at fixed width*. Still tru
 model so far: none of this moves chat_eval/GSM8K/HumanEval off the random-guessing floor --
 that gap remains a scale problem, not an architecture problem.
 
+## 2026-08-11 -- Vast.ai session closed: real wall-clock vs actual GPU-compute time
+
+Instance rented 06:22 PM, deleted 10:23 PM -- **~4h01m total rental**, ~$1 all-in (well under
+the earlier ~$5 budget). Worth being honest about what that 4 hours actually contained, since
+it's not 4 hours of GPU compute: A10 pretrain (28.74 min) + SFT (0.31 min) + full eval (~50
+min) + A9 pretrain (37.87 min) + SFT (~1 min) + eval (~20 min, sampled) adds up to **roughly
+2.3h of actual training/eval compute** -- the remaining ~1.7h was debugging (the disk-full
+crash and resume, the credential/interpreter/`--vocab-size` bugs on the A9 notebook, hunting
+for a working shell method after the SSH connect string wasn't easy to find in the Vast.ai UI)
+and idle time between steps waiting on a human to paste the next command/log. Not a criticism
+of the tooling -- this was the first real session on this backend, and every bug hit here is
+now fixed in the scripts/notebooks for next time (see the entries above). Logging the real
+ratio because "$1 for two full architecture experiments" undersells how much of that hour was
+spent on infra shakedown rather than productive compute, and a repeat run on this now-debugged
+pipeline should take meaningfully less wall-clock.
+
 ## Open questions / next up
 - Consider a tied-embeddings experiment (`wte`==`lm_head`, A-opt-1): untied
   by upstream design (see `nanochat/gpt.py` docstring). Given A9's clean

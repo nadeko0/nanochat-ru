@@ -39,6 +39,7 @@ parser.add_argument("--model-tag", type=str, default=None, help="model tag to lo
 parser.add_argument("--model-step", type=int, default=None, help="model step to load from")
 # Training horizon
 parser.add_argument("--num-epochs", type=int, default=1, help="number of epochs over GSM8K")
+parser.add_argument("--max-train-examples", type=int, default=None, help="cap GSM8K train set size (tasks.common.Task's existing `stop` kwarg, just not exposed here upstream). None = full 7473-example train set")
 # Batch sizes / sampling
 parser.add_argument("--device-batch-size", type=int, default=8, help="max batch size per forward pass")
 parser.add_argument("--examples-per-step", type=int, default=16, help="total examples per optimization step across all ranks")
@@ -77,7 +78,7 @@ engine = Engine(model, tokenizer) # for sampling rollouts
 # -----------------------------------------------------------------------------
 # Rollout / sampling generator loop that yields batches of examples for training
 
-train_task = GSM8K(subset="main", split="train")
+train_task = GSM8K(subset="main", split="train", stop=args.max_train_examples)
 val_task = GSM8K(subset="main", split="test")
 num_steps = (len(train_task) // args.examples_per_step) * args.num_epochs
 print0(f"Calculated number of steps: {num_steps}")

@@ -404,12 +404,51 @@ show real grammatical competence even though it can't do knowledge/reasoning.
 
 Full unsampled runs (all 5 chat_eval tasks incl. GSM8K/HumanEval, and all
 67 BLiMP categories x 1000 pairs, for both `d4` and `d6`) need GPU to
-finish in reasonable time -- queued in `kaggle/kaggle_eval.ipynb`,
-estimated ~3-4h total for both models across both evals, not run yet.
+finish in reasonable time -- queued in `kaggle/kaggle_eval.ipynb`.
+
+## 2026-08-11 -- A6/A6.5 full results (both models, full test sets)
+
+Ran on Kaggle T4 (single GPU, no DDP needed for eval -- see the notebook's
+own note on why). Full log:
+`kaggle/runs/2026-08-11_chat_eval_blimp_d4_d6.ipynb`.
+
+**chat_eval.py** (full test sets, not sampled):
+
+| task | `d4` | `d6` | chance baseline |
+|---|---|---|---|
+| ARC-Easy (n=2376) | 25.34% (602/2376) | 24.87% (591/2376) | 25% |
+| ARC-Challenge (n=1172) | 22.61% (265/1172) | 22.44% (263/1172) | 25% |
+| MMLU (n=14042) | 22.90% (3215/14042) | 22.94% (3221/14042) | 25% |
+| GSM8K (n=1319) | 0.08% (1/1319) | 0.00% (0/1319) | 0% |
+| HumanEval (n=164) | 0.00% (0/164) | 0.00% (0/164) | 0% |
+| **ChatCORE** | **-0.0109** | **-0.0127** | 0 |
+
+Both models sit at or fractionally below random-guessing on every single
+task, ChatCORE effectively zero for both. Not a surprise -- exactly what
+was predicted going in (A6's own plan entry called this "expected to be
+near-baseline") -- but now it's a measured fact across the *entire* test
+sets, not an assumption. `d6` (2x the params, better bpb) is not
+meaningfully better than `d4` here; more capacity in this range doesn't
+buy any knowledge/reasoning capability, consistent with the earlier Qwen
+comparison (that gap is about orders of magnitude of scale, not the
+2x we have between `d4` and `d6`).
+
+**eval_blimp.py** (all 67 categories x 1000 pairs = 67,000 pairs each):
+
+- `d4`: **66.46%** overall
+- `d6`: **70.31%** overall
+- (50% = chance, ~96.4% = human agreement per Warstadt et al. 2020)
+
+Both models score well above chance -- confirming the local spot-check
+wasn't a fluke -- and `d6` is measurably ahead of `d4` by ~4 points here,
+unlike on chat_eval. This is the clearest evidence yet for the working
+hypothesis from A6.5's plan entry: at this scale, grammatical competence is
+a real, learnable, measurably-improvable capability, while
+knowledge/reasoning (MMLU/GSM8K-style) is not -- more params/data moves
+the needle on the former and not on the latter, at least across the `d4`
+to `d6` jump tested here.
 
 ## Open questions / next up
-
-- Run `kaggle/kaggle_eval.ipynb` (A6/A6.5 full results).
 - Consider a tied-embeddings experiment (`wte`==`lm_head`): at `d4`,
   embeddings are ~46% of total params (untied by upstream design, see
   `nanochat/gpt.py` docstring "untied weights for token embedding and lm_head").

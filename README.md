@@ -43,6 +43,15 @@ log — including dead ends and things that didn't work — and
   still ramble/contradict themselves sometimes — bpb improved measurably,
   perceived quality only modestly, logged honestly in RESEARCH_LOG.md
   rather than oversold.
+- **Full eval suite run, both models, full test sets (not sampled).**
+  `chat_eval.py` (ARC/MMLU/GSM8K/HumanEval, upstream's own benchmarks):
+  both models at/below the random-guessing baseline on every task
+  (ChatCORE ≈ 0 for both) — confirms the expectation that knowledge/reasoning
+  is out of reach at this scale, and that `d6`'s extra capacity doesn't
+  change that. BLiMP (grammar, 67 categories × 1000 pairs, [Warstadt et al.
+  2020](https://arxiv.org/abs/1912.00582)): **`d4` 66.46%, `d6` 70.31%** —
+  both well above the 50% chance level, and `d6` measurably ahead here,
+  unlike on chat_eval. Full numbers: RESEARCH_LOG.md.
 - **Phase 2 (Russian): deferred** until the English side is judged "done
   enough" within the free-tier compute budget.
 

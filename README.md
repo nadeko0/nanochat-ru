@@ -28,11 +28,16 @@ log — including dead ends and things that didn't work — and
   `no_repeat_ngram_size` to `Engine.generate()` (standard techniques, ported
   not invented — see CHANGELOG). Verified locally: stopped the observed
   looping across every test seed tried so far.
-- **`d6` (73.53M params, ratio=20/Chinchilla-optimal): pretrain done, SFT next.**
+- **`d6` (73.53M params, ratio=20/Chinchilla-optimal): pretrain + SFT done.**
   VRAM-probed first (`kaggle/kaggle_vram_probe.ipynb`) rather than guessing,
   chosen over overtraining `d4` on more data (the originally-planned `d4v2`)
-  — see RESEARCH_LOG.md for why. 1770 steps / 464.0M tokens, 255.7 min,
-  **min val_bpb 0.9945** — better than `d4`'s 1.0994.
+  — see RESEARCH_LOG.md for why. Pretrain: 1770 steps / 464.0M tokens, 255.7
+  min, **min val_bpb 0.9945** (vs `d4`'s 1.0994). SFT: 1 SmolTalk epoch, 7.0
+  min, **min val_bpb 0.6169** (vs `d4`'s 0.6616). Chat test (with the
+  repetition fix active): no loops in either test prompt, but responses
+  still ramble/contradict themselves sometimes — bpb improved measurably,
+  perceived quality only modestly, logged honestly in RESEARCH_LOG.md
+  rather than oversold.
 - **Phase 2 (Russian): deferred** until the English side is judged "done
   enough" within the free-tier compute budget.
 
@@ -155,23 +160,26 @@ doc, given the small scope of this project) once available.
 | pretrain hardware | Kaggle T4 x2, 64.1 min | Kaggle T4 x2, 255.7 min |
 | pretrain peak memory | 11.16GiB / 15GiB | 7.96GiB / 15GiB |
 | **pretrain min val_bpb** | 1.0994 (from 3.85 at init) | **0.9945** (from 3.17 at init) |
-| SFT | 1 epoch SmolTalk, 125 steps, 8.3 min | not run yet |
-| SFT min val_bpb | 0.6616 | — |
+| SFT | 1 epoch SmolTalk, 125 steps, 8.3 min | 1 epoch SmolTalk, 7.0 min |
+| **SFT min val_bpb** | 0.6616 | **0.6169** |
 
 Both on the ClimbMix val shard (pretrain) / held-out SmolTalk+MMLU+GSM8K
-mixture (SFT). `d6` beat `d4` on pretrain bpb by doubling model capacity at
-the same Chinchilla-compute-optimal token ratio (20), instead of the
-originally-planned `d4v2` (same `d4` architecture, 5x more data) — see
+mixture (SFT). `d6` beat `d4` on both pretrain and SFT bpb by doubling model
+capacity at the same Chinchilla-compute-optimal token ratio (20), instead of
+the originally-planned `d4v2` (same `d4` architecture, 5x more data) — see
 [docs/RESEARCH_LOG.md](docs/RESEARCH_LOG.md) for the VRAM-probe-driven
 reasoning behind that choice.
 
-Chat quality on `d4`+SFT is genuinely mixed, logged honestly in
-[docs/RESEARCH_LOG.md](docs/RESEARCH_LOG.md) rather than cherry-picked: some
-prompts get a coherent, on-topic reply, others degenerate into repetition
-loops (fixed since, see CHANGELOG.md for the `repetition_penalty` /
-`no_repeat_ngram_size` addition — not yet re-measured with a formal metric,
-only spot-checked). `d6` SFT is next, to see if the bigger base model also
-means more consistent chat behavior.
+Chat quality is genuinely mixed on both models, logged honestly in
+[docs/RESEARCH_LOG.md](docs/RESEARCH_LOG.md) rather than cherry-picked.
+`d4`+SFT (before the repetition fix): some prompts coherent, others
+degenerate into repetition loops. `d6`+SFT (with `repetition_penalty` +
+`no_repeat_ngram_size` active, see CHANGELOG.md): no literal loops in either
+test prompt, but responses still ramble or contradict themselves sometimes
+(e.g. claiming two different names in one answer) — the bpb improvement is
+real and measurable, the jump in perceived chat quality is smaller than the
+numbers alone would suggest. An objective repetition-rate metric (not just
+spot-checking 2 prompts) is still open, see the project plan.
 
 ## License
 

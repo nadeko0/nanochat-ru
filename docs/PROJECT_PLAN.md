@@ -25,7 +25,10 @@ reason.
 - [x] A3. `d6` pretrain complete: 1770/1770 steps, 255.72 min, min val_bpb
       0.9945 (vs `d4`'s 1.0994), peak memory 7.96GiB. See
       kaggle/runs/2026-08-10_d6_pretrain_ratio20.ipynb.
-- [ ] A4. SFT on the resulting checkpoint.
+- [x] A4. `d6` SFT complete: 1 SmolTalk epoch, 7.03 min, min val_bpb 0.6169
+      (vs `d4`'s 0.6616). Chat test (2 prompts, with the repetition-penalty
+      fix active): both coherent, no loops. See
+      kaggle/runs/2026-08-11_d6_sft.ipynb.
 - [ ] A5. Automated repetition-loop metric (not eyeballing transcripts) —
       compare old `d4` vs the new run objectively, and re-validate the A2.5
       fix with real numbers instead of a 4-seed spot-check.
@@ -87,5 +90,5 @@ reason.
 
 ---
 
-Progress snapshot: as of 2026-08-10, Phase A: A1/A2/A2.5/A3 done, A4 (SFT)
-next; Phases B and C not started (deliberately deferred).
+Progress snapshot: as of 2026-08-11, Phase A: A1-A4 done, A5 (repetition
+metric) next; Phases B and C not started (deliberately deferred).

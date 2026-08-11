@@ -296,9 +296,39 @@ an interrupted one.
 
 Next: SFT on this checkpoint (A4).
 
+## 2026-08-11 -- d6 SFT complete
+
+1 SmolTalk epoch (460,341 rows, same mixture as `d4`'s SFT --
+`--mmlu-epochs=0 --gsm8k-epochs=0`), 7.03 min on Kaggle T4x2, peak memory
+7,960.36MiB. **Min validation bpb: 0.6169**, down from `d4`'s 0.6616. Full
+log: `kaggle/runs/2026-08-11_d6_sft.ipynb`.
+
+Chat test (in-Kaggle, same 2 prompts as the `d4` SFT test, this time with
+the repetition-penalty/no-repeat-ngram fix from A2.5 active):
+
+- "hi" -> *"I'm sorry for the misunderstanding, but as a student, I
+  understand that sometimes we don't have access to any data or
+  information. However, if you're looking for a specific instance of your
+  learning style or class, I would recommend trying online courses or
+  tutorials on various topics."* -- coherent, no loop, somewhat rambling/
+  off-topic (never actually says hello).
+- "What is your name?" -> *"My name is Jack, and I'm a developer. My name
+  is Rachel Nick, and my work's been called"* -- no repetition loop, but
+  internally inconsistent (claims two different names in the same answer)
+  and cuts off mid-sentence (hit max_tokens).
+
+Neither response degenerated into a literal token/n-gram loop -- consistent
+with the A2.5 fix working, though still just a 2-prompt spot-check, not the
+systematic A5 metric. The `d6` responses are not obviously more *coherent*
+in content than `d4`'s were (both models still contradict themselves,
+ramble, or fail to directly answer) -- the clearest, most measurable win
+from `d6` so far is the bpb numbers (0.9945 vs 1.0994 pretrain, 0.6169 vs
+0.6616 SFT), not a night-and-day difference in perceived chat quality. That
+gap between "the loss numbers improved" and "the chat still isn't reliably
+good" is itself worth remembering honestly, not smoothing over.
+
 ## Open questions / next up
 
-- SFT on `d6` (A4), then compare chat quality against the `d4` SFT run.
 - Build an automated repetition-loop metric (e.g. max repeated n-gram length
   over a fixed prompt set) to replace eyeballing transcripts -- would let
   `d4` vs `d6` be compared objectively instead of anecdotally.

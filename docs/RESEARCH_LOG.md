@@ -479,6 +479,34 @@ interpreter-shutdown noise from garbage-collecting the training loop's
 infinite `itertools.cycle` generator, not a real failure (training and
 saving had already finished successfully by that point).
 
+## 2026-08-11 -- more qualitative d6 chat samples (local, CPU)
+
+Broader spot-check beyond the 2 canned prompts used so far, 5 new English
+prompts against `d6` SFT (repetition fix active, temperature=0.6, seed=42):
+
+- "What is the capital of France?" -> *"The capital of Paris."* -- fluent
+  word choice, but grammatically malformed (missing subject) and doesn't
+  actually land the fact cleanly.
+- "Can you write a short poem about the ocean?" -> genuinely
+  poem-shaped output ("The sun's rays are casting an orange glow over the
+  deep horizon...") -- fluent and on-genre, if generic.
+- "Why do we need sleep?" -> plausible-sounding but empty/circular science
+  ("the body's natural clock shifts from waking to awake... often referred
+  to as 'neverting back'" -- "neverting back" isn't a real term, invented).
+- "What is 2 plus 2?" -> incoherent pseudo-math ("The formula for an
+  arithmetic series is: A = (1 - 2) + (2 - 3) + ... + 2"), no actual
+  arithmetic -- consistent with the measured 0% GSM8K accuracy (A6).
+- "Explain how a computer works, in simple terms." -> fluent but generic
+  and drifts into unrelated territory (starts talking about "list
+  comprehension" mid-explanation).
+
+Consistent picture across all 7 prompts tested so far (these 5 plus the 2
+from the SFT run): grammatically fluent, genre-appropriate output (poem
+sounds like a poem, question gets question-shaped phrasing) but weak or
+absent factual grounding and zero real reasoning -- exactly the
+BLiMP-high/MMLU-low split A6.5 measured formally, now visible in actual
+transcripts rather than just aggregate scores.
+
 ## Open questions / next up
 - Consider a tied-embeddings experiment (`wte`==`lm_head`): at `d4`,
   embeddings are ~46% of total params (untied by upstream design, see

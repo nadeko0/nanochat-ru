@@ -12,10 +12,14 @@ reference.
 This is a personal learning/research project, not a production system: the
 goal is to run the full nanochat pipeline (tokenize -> pretrain -> SFT ->
 chat) end to end on free-tier hardware, at a scale small enough to fit that
-hardware, understand every layer of it, and repeat it for Russian. See
-[docs/RESEARCH_LOG.md](docs/RESEARCH_LOG.md) for the full, honest experiment
-log — including dead ends and things that didn't work — and
-[CHANGELOG.md](CHANGELOG.md) for what changed in the repo and when.
+hardware, understand every layer of it, and repeat it for Russian.
+
+- [docs/RESEARCH_LOG.md](docs/RESEARCH_LOG.md) — the full, honest experiment
+  log, including dead ends and things that didn't work.
+- [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md) — the tracked completion
+  checklist this project is judged against.
+- [CHANGELOG.md](CHANGELOG.md) — what changed in the repo and when.
+- [kaggle/runs/](kaggle/runs/) — every real run, archived with full output.
 
 ## Status (see CHANGELOG.md for exact dates/details)
 
@@ -26,23 +30,24 @@ log — including dead ends and things that didn't work — and
   full-output run notebooks: [kaggle/runs/](kaggle/runs/).
 - **Repetition-loop fix, objectively measured**: added `repetition_penalty` +
   `no_repeat_ngram_size` to `Engine.generate()` (standard techniques, ported
-  not invented — see CHANGELOG). `scripts/eval_repetition.py`
+  not invented — see CHANGELOG). [`scripts/eval_repetition.py`](scripts/eval_repetition.py)
   (distinct-1/2 + max-4gram-repeat over 10 prompts x 3 seeds, [Li et al.
   2016](https://arxiv.org/abs/1510.03055)) confirms it: **18/30 (`d4`) and
   8/30 (`d6`) generations looped without it, 0/30 for both with it.** With
   the fix on, `d4` and `d6` are nearly indistinguishable on this metric —
   loop-avoidance turned out to be a decoding fix, not something model size
-  fixes on its own. Full numbers: RESEARCH_LOG.md.
+  fixes on its own. Full numbers: [docs/RESEARCH_LOG.md](docs/RESEARCH_LOG.md).
 - **`d6` (73.53M params, ratio=20/Chinchilla-optimal): pretrain + SFT done.**
-  VRAM-probed first (`kaggle/kaggle_vram_probe.ipynb`) rather than guessing,
-  chosen over overtraining `d4` on more data (the originally-planned `d4v2`)
-  — see RESEARCH_LOG.md for why. Pretrain: 1770 steps / 464.0M tokens, 255.7
+  VRAM-probed first ([kaggle/kaggle_vram_probe.ipynb](kaggle/kaggle_vram_probe.ipynb))
+  rather than guessing, chosen over overtraining `d4` on more data (the
+  originally-planned `d4v2`) — see
+  [docs/RESEARCH_LOG.md](docs/RESEARCH_LOG.md) for why. Pretrain: 1770 steps / 464.0M tokens, 255.7
   min, **min val_bpb 0.9945** (vs `d4`'s 1.0994). SFT: 1 SmolTalk epoch, 7.0
   min, **min val_bpb 0.6169** (vs `d4`'s 0.6616). Chat test (with the
   repetition fix active): no loops in either test prompt, but responses
   still ramble/contradict themselves sometimes — bpb improved measurably,
-  perceived quality only modestly, logged honestly in RESEARCH_LOG.md
-  rather than oversold.
+  perceived quality only modestly, logged honestly in
+  [docs/RESEARCH_LOG.md](docs/RESEARCH_LOG.md) rather than oversold.
 - **Full eval suite run, both models, full test sets (not sampled).**
   `chat_eval.py` (ARC/MMLU/GSM8K/HumanEval, upstream's own benchmarks):
   both models at/below the random-guessing baseline on every task
@@ -51,12 +56,13 @@ log — including dead ends and things that didn't work — and
   change that. BLiMP (grammar, 67 categories × 1000 pairs, [Warstadt et al.
   2020](https://arxiv.org/abs/1912.00582)): **`d4` 66.46%, `d6` 70.31%** —
   both well above the 50% chance level, and `d6` measurably ahead here,
-  unlike on chat_eval. Full numbers: RESEARCH_LOG.md.
-- **RL (`chat_rl.py`) on `d6`, bounded run (480 GSM8K examples): confirms
-  the low expectation.** 508/510 logged reward values were exactly 0.0 —
-  essentially no reward signal to learn from at ~0% baseline GSM8K accuracy.
-  RL sharpens existing capability rather than creating it; there wasn't any
-  here to sharpen. Full numbers: RESEARCH_LOG.md.
+  unlike on chat_eval. Full numbers: [docs/RESEARCH_LOG.md](docs/RESEARCH_LOG.md).
+- **RL ([`scripts/chat_rl.py`](scripts/chat_rl.py)) on `d6`, bounded run
+  (480 GSM8K examples): confirms the low expectation.** 508/510 logged
+  reward values were exactly 0.0 — essentially no reward signal to learn
+  from at ~0% baseline GSM8K accuracy. RL sharpens existing capability
+  rather than creating it; there wasn't any here to sharpen. Full numbers:
+  [docs/RESEARCH_LOG.md](docs/RESEARCH_LOG.md).
 - **Phase 2 (Russian): deferred** until the English side is judged "done
   enough" within the free-tier compute budget.
 
@@ -74,6 +80,10 @@ continuously to Google Drive so a killed session never loses much progress.
 | Checkpoint storage | local disk | synced continuously to Google Drive via rclone |
 | Language | English (ClimbMix) | English first, then a Russian corpus (phase 2) |
 | `Engine.generate()` | temperature + top_k only | + `repetition_penalty` + `no_repeat_ngram_size` (see CHANGELOG.md) |
+| `scripts/chat_rl.py` | full GSM8K train set only | + `--max-train-examples` to bound RL to a subset |
+| Eval tooling | `chat_eval.py` (ARC/MMLU/GSM8K/HumanEval) only | + [`scripts/eval_blimp.py`](scripts/eval_blimp.py), [`scripts/eval_repetition.py`](scripts/eval_repetition.py) |
+| VRAM sizing | none (find out via OOM) | [`kaggle/vram_probe.py`](kaggle/vram_probe.py), tests before committing hours |
+| Checkpoint sync | none (single long run, no interruption risk) | [`kaggle/sync_checkpoints.py`](kaggle/sync_checkpoints.py), background poller to Drive |
 
 Everything else — model architecture, tokenizer (rustbpe), training loop,
 optimizer, evaluation harness — is unmodified nanochat code. Every deviation
@@ -106,8 +116,14 @@ Development happens locally (this git repo); training happens on Kaggle, one
 notebook per phase, each uploaded directly (File -> Upload Notebook) rather
 than copied cell by cell:
 
-- [kaggle/kaggle_train.ipynb](kaggle/kaggle_train.ipynb) — pretraining. Done for English (see Status).
-- [kaggle/kaggle_sft.ipynb](kaggle/kaggle_sft.ipynb) — SFT, run after pretraining. Not run yet.
+- [kaggle/kaggle_train.ipynb](kaggle/kaggle_train.ipynb) — pretraining. Run for `d4` and `d6` (see Status).
+- [kaggle/kaggle_sft.ipynb](kaggle/kaggle_sft.ipynb) — SFT, run after pretraining. Run for `d4` and `d6`.
+- [kaggle/kaggle_vram_probe.ipynb](kaggle/kaggle_vram_probe.ipynb) — finds the largest
+  `--device-batch-size` that fits before committing hours to a bigger-depth pretrain run. Run
+  for depths 5-8.
+- [kaggle/kaggle_eval.ipynb](kaggle/kaggle_eval.ipynb) — full `chat_eval.py` (ARC/MMLU/GSM8K/
+  HumanEval) + full BLiMP grammar eval, both models. Run.
+- [kaggle/kaggle_rl.ipynb](kaggle/kaggle_rl.ipynb) — bounded `chat_rl.py` (RL on GSM8K). Run for `d6`.
 
 1. **Local**: edit code, config, or a notebook here; commit to git; push to
    GitHub.
@@ -158,17 +174,26 @@ completes successfully:
 
 ## Evaluation
 
-Upstream nanochat's benchmarks (CORE, MMLU, GSM8K, HumanEval, ARC) assume a
-GPT-2-to-GPT-3-scale model and aren't informative at 36.7M params. Instead,
-this project reports:
+Upstream nanochat's own benchmarks (CORE, MMLU, GSM8K, HumanEval, ARC)
+assume a GPT-2-to-GPT-3-scale model — running them at 36-73M params was
+expected to (and did) mostly return the random-guessing baseline. Rather
+than skip them, this project runs the full suite anyway for completeness,
+and adds two eval methods actually informative at this scale:
 
-- `val_bpb` (bits-per-byte on a held-out validation split of the training
-  corpus) — vocab-size-invariant, computed by `scripts/base_eval.py`.
-- Perplexity on the same held-out split.
-
-Both computed separately for the English and Russian phases once each
-finishes training. Numbers will be added here (not in a separate leaderboard
-doc, given the small scope of this project) once available.
+- **`val_bpb`** (bits-per-byte on held-out data) — computed inline during
+  pretrain/SFT by the vendored training scripts, vocab-size-invariant.
+- **`scripts/chat_eval.py`** (vendored, unmodified) — ARC-Easy/Challenge,
+  MMLU, GSM8K, HumanEval, run on the *full* test sets, not sampled.
+- **`scripts/eval_blimp.py`** (added this project) — [BLiMP](https://arxiv.org/abs/1912.00582),
+  67 grammar categories × 1000 minimal pairs each, scored by which sentence
+  of a grammatical/ungrammatical pair the model assigns higher probability
+  to. A much better fit for this model's scale than MMLU/GSM8K.
+- **`scripts/eval_repetition.py`** (added this project) — distinct-1/
+  distinct-2 ([Li et al. 2016](https://arxiv.org/abs/1510.03055)) +
+  max-4gram-repeat over a fixed prompt set, an objective replacement for
+  eyeballing chat transcripts for repetition loops.
+- **`scripts/chat_rl.py`** (vendored, `--max-train-examples` flag added
+  this project) — GRPO-lite RL on GSM8K.
 
 ### English results
 
@@ -177,28 +202,29 @@ doc, given the small scope of this project) once available.
 | depth / params | 4 / 36.70M | 6 / 73.53M |
 | pretrain tokens | 230,686,720 (880 steps, ratio=20) | 463,994,880 (1770 steps, ratio=20) |
 | pretrain hardware | Kaggle T4 x2, 64.1 min | Kaggle T4 x2, 255.7 min |
-| pretrain peak memory | 11.16GiB / 15GiB | 7.96GiB / 15GiB |
 | **pretrain min val_bpb** | 1.0994 (from 3.85 at init) | **0.9945** (from 3.17 at init) |
-| SFT | 1 epoch SmolTalk, 125 steps, 8.3 min | 1 epoch SmolTalk, 7.0 min |
+| SFT | 1 epoch SmolTalk, 8.3 min | 1 epoch SmolTalk, 7.0 min |
 | **SFT min val_bpb** | 0.6616 | **0.6169** |
+| ARC-Easy / ARC-Challenge / MMLU | 25.34% / 22.61% / 22.90% | 24.87% / 22.44% / 22.94% |
+| GSM8K / HumanEval | 0.08% / 0.00% | 0.00% / 0.00% |
+| ChatCORE | -0.0109 | -0.0127 |
+| **BLiMP (grammar, 67×1000 pairs)** | 66.46% | **70.31%** |
+| repetition loops, 30 generations (no fix / with fix) | 18/30 / 0/30 | 8/30 / 0/30 |
+| RL on GSM8K (480 examples) | not run | reward ≈ 0 on 508/510 steps |
 
-Both on the ClimbMix val shard (pretrain) / held-out SmolTalk+MMLU+GSM8K
-mixture (SFT). `d6` beat `d4` on both pretrain and SFT bpb by doubling model
-capacity at the same Chinchilla-compute-optimal token ratio (20), instead of
-the originally-planned `d4v2` (same `d4` architecture, 5x more data) — see
-[docs/RESEARCH_LOG.md](docs/RESEARCH_LOG.md) for the VRAM-probe-driven
-reasoning behind that choice.
+Chance baselines: ARC/MMLU 25%, GSM8K/HumanEval 0%, ChatCORE 0, BLiMP 50%.
+Full per-run numbers, methodology, and honest interpretation (including
+where `d6` did and didn't actually beat `d4`) are in
+[docs/RESEARCH_LOG.md](docs/RESEARCH_LOG.md); raw notebook output for every
+run is in [kaggle/runs/](kaggle/runs/).
 
-Chat quality is genuinely mixed on both models, logged honestly in
-[docs/RESEARCH_LOG.md](docs/RESEARCH_LOG.md) rather than cherry-picked.
-`d4`+SFT (before the repetition fix): some prompts coherent, others
-degenerate into repetition loops. `d6`+SFT (with `repetition_penalty` +
-`no_repeat_ngram_size` active, see CHANGELOG.md): no literal loops in either
-test prompt, but responses still ramble or contradict themselves sometimes
-(e.g. claiming two different names in one answer) — the bpb improvement is
-real and measurable, the jump in perceived chat quality is smaller than the
-numbers alone would suggest. An objective repetition-rate metric (not just
-spot-checking 2 prompts) is still open, see the project plan.
+**The short version**: both models are fluent at the sentence level
+(BLiMP well above chance, grammatically well-formed output in ad hoc chat
+testing) but have essentially no knowledge or reasoning capability (MMLU/
+ARC/GSM8K at or below chance) — a real, measured split, not a guess. `d6`'s
+extra capacity measurably helped bpb and BLiMP, not chat_eval or RL. The
+repetition-penalty fix (a decoding change, not a training one) eliminated
+loops entirely regardless of model size — see CHANGELOG.md.
 
 ## License
 

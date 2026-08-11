@@ -5,6 +5,33 @@ for the reasoning/dead-ends behind these changes, [docs/PROJECT_PLAN.md](docs/PR
 for the tracked checklist, and [kaggle/runs/](kaggle/runs/) for the full-output notebooks
 behind each result.
 
+## 2026-08-11 (cont'd, 5)
+
+- **A10 SFT + full eval complete**: min val_bpb 0.6285 (between `d4` 0.6616 and `d6` 0.6169),
+  chat_eval at/below baseline like `d4`/`d6` (ChatCORE -0.0113), **BLiMP 72.13% -- the best of
+  all three English models**. Pretrain-bpb advantage didn't carry over to SFT bpb -- a real,
+  non-monotonic result, logged honestly rather than smoothed over. Hit and fixed a `!python3`
+  vs `sys.executable` interpreter mismatch (bare `python3` in a shell cell missed the deps
+  Cell 1 installed) and a repeat of the whole-folder-`rclone copy` disk-full bug, this time on
+  the checkpoint *pull* side. Jupyter's own notebook-save kept failing ("database is locked"),
+  so archived the pasted console output as a plain log
+  (`vastai/runs/2026-08-11_a10_sft_eval_console.log`) instead of a fabricated baked-output
+  notebook.
+- Added `eval_repetition.py` to `vastai_eval_a10.ipynb` (was the one d4/d6 metric missing for
+  `a10`, not run yet as of this entry).
+- **Added `vastai/prune_checkpoints.py`**: background watcher (same pattern as
+  `sync_checkpoints.py`) that keeps only the last N local checkpoint steps once each is old
+  enough to have synced to Drive -- direct fix for the disk-full pattern hit twice on A10.
+- **Added `vastai/vastai_train_a9.ipynb`**: full tokenizer-retrain -> pretrain -> SFT -> eval
+  pipeline for A9 in one notebook, using a separate `NANOCHAT_BASE_DIR`
+  (`~/nanochat_cache_a9`) with the dataset symlinked in from the shared cache, so A9's
+  `vocab_size=16384` tokenizer can never collide with the shared `vocab_size=32768` one.
+- Fixed a real bug found on review before A9 ever ran: `sync_checkpoints.py`'s "tokenizer"
+  subdir always maps to the shared `gdrive:tokenizer` remote, regardless of which
+  `NANOCHAT_BASE_DIR` it's pointed at -- running it in the background during A9's pretrain/SFT
+  would have silently overwritten the shared `d4`/`d6`/`a10` tokenizer on Drive with A9's. Added
+  a `--skip-subdirs` flag to `sync_checkpoints.py` and used it in the A9 notebook.
+
 ## 2026-08-11 (cont'd, 4)
 
 - **A10 pretrain complete on Vast.ai (real numbers)**: 1905 steps, 499.4M

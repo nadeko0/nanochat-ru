@@ -69,9 +69,14 @@ reason.
       (our current best model, not `d4`): `--vocab-size=16384 --depth=7`
       (default aspect-ratio) -> `model_dim=512`, **72.35M params** (close
       to `d6`'s 73.53M), non-embedding fraction 30.4% vs `d6`'s 14.4%.
-      Requires retraining the tokenizer (different vocab_size). Estimated
-      ~7.9h pretrain (calibrated from `d4`/`d6`'s measured FLOPs-to-wallclock
-      rate). Queued for after A10 finishes (shares Kaggle GPU-hours budget).
+      Requires retraining the tokenizer (different vocab_size, isolated in
+      its own dir/Drive path so it can't collide with the shared
+      `vocab_size=32768` tokenizer -- see RESEARCH_LOG.md). Estimated
+      ~7.9h on Kaggle T4x2, likely ~50min on the same rented RTX 5070 Ti
+      given A10's measured ~9.6x speedup. Notebook ready:
+      `vastai/vastai_train_a9.ipynb` (full tokenizer-retrain -> pretrain ->
+      SFT -> eval pipeline, with `vastai/prune_checkpoints.py` running in
+      the background to avoid A10's disk-full pattern). Not run yet.
 - [x] A10 (pretrain). `--aspect-ratio=48 --depth=7` (model_dim=384, same
       width as `d6`, 7 layers instead of 6, 87.88M params) pretrained on a
       rented Vast.ai RTX 5070 Ti instead of Kaggle (`vastai/run_a10.sh`).
@@ -81,10 +86,14 @@ reason.
       (0.9945). Survived a disk-full crash at step 1000/1905 (resumed
       cleanly from step 900, see RESEARCH_LOG.md). Full log:
       `vastai/runs/2026-08-11_a10_pretrain_console.log`.
-- [ ] A10 (SFT + eval). Not yet confirmed complete -- the recovered console
-      log covers pretrain only. Next: run SFT + full `chat_eval.py`/
-      `eval_blimp.py` via `vastai/vastai_eval_a10.ipynb` (real downloadable
-      notebook, not another terminal paste) on the same instance.
+- [x] A10 (SFT + eval). SFT: 32/32 steps, min val_bpb 0.6285 (between `d4`
+      0.6616 and `d6` 0.6169 -- pretrain bpb advantage didn't carry over to
+      SFT). `chat_eval.py`: ARC-Easy 25.04%, ARC-Challenge 22.78%, MMLU
+      22.94%, GSM8K/HumanEval 0.00%, ChatCORE -0.0113 -- baseline, same as
+      `d4`/`d6`. **BLiMP: 72.13%, best of all three models** (`d4` 66.46%,
+      `d6` 70.31%). `eval_repetition.py` not run yet (added to the notebook
+      after this session). See RESEARCH_LOG.md and
+      `vastai/runs/2026-08-11_a10_sft_eval_console.log`.
 
 ### A-optional (stretch, only if there's budget left)
 
@@ -121,12 +130,11 @@ reason.
 
 ---
 
-Progress snapshot: as of 2026-08-11, Phase A: A1-A8(interim) done. A10
-pretrain done on a rented Vast.ai RTX 5070 Ti (~9.6x measured speedup vs
-Kaggle T4x2, new best min val_bpb 0.977060) -- SFT/eval for `a10` still
-pending, next up via `vastai/vastai_eval_a10.ipynb`.
-`kaggle/kaggle_train_a10.ipynb` stays as the Kaggle fallback. A9 queued
-after (~7.9h estimated on Kaggle T4x2, likely well under an hour on the
-same rented GPU given A10's measured speedup -- needs a tokenizer retrain,
-sized against `d6`'s budget). Phases B and C not started (deliberately
-deferred).
+Progress snapshot: as of 2026-08-11, Phase A: A1-A8(interim), A10 all done.
+A10 on a rented Vast.ai RTX 5070 Ti: best pretrain bpb (0.977060) and best
+BLiMP (72.13%) of all three English models, ~9.6x measured speedup vs
+Kaggle T4x2 -- but SFT bpb (0.6285) landed between `d4`/`d6`, not a clean
+win across every metric. A9 up next on the same instance via the new
+`vastai/vastai_train_a9.ipynb` (full self-contained pipeline with
+checkpoint pruning to avoid A10's disk-full lessons). Phases B and C not
+started (deliberately deferred).

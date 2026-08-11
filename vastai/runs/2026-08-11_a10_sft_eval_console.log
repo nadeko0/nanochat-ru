@@ -1,0 +1,206 @@
+Autodetected device type: cuda
+2026-08-11 17:47:16,589 - nanochat.common - INFO - Distributed world size: 1
+COMPUTE_DTYPE: torch.bfloat16 (auto-detected: CUDA SM 120 (bf16 supported))
+GPU: NVIDIA GeForce RTX 5070 Ti | Peak FLOPS (BF16): 8.79e+13
+WARNING: Flash Attention 3 not available, using PyTorch SDPA fallback. Training will be less efficient.
+2026-08-11 17:47:16,590 - nanochat.checkpoint_manager - INFO - Loading model from /root/nanochat_cache/base_checkpoints/a10 with step 1905
+2026-08-11 17:47:16,902 - nanochat.checkpoint_manager - INFO - Building model with config: {'sequence_len': 2048, 'vocab_size': 32768, 'n_layer': 7, 'n_head': 3, 'n_kv_head': 3, 'n_embd': 384, 'window_pattern': 'L'}
+Inherited max_seq_len=2048 from pretrained checkpoint
+Inherited device_batch_size=8 from pretrained checkpoint
+Inherited total_batch_size=262144 from pretrained checkpoint
+Inherited embedding_lr=0.3 from pretrained checkpoint
+Inherited unembedding_lr=0.008 from pretrained checkpoint
+Inherited matrix_lr=0.02 from pretrained checkpoint
+Tokens / micro-batch / rank: 8 x 2048 = 16,384
+Tokens / micro-batch: 16,384
+Total batch size 262,144 => gradient accumulation steps: 16
+Scaling the LR for the AdamW parameters proportional to 1/sqrt(384/768) = 1.414214
+2026-08-11 17:47:18,190 - nanochat.checkpoint_manager - INFO - Loading optimizer state from /root/nanochat_cache/base_checkpoints/a10/optim_001905_rank0.pt
+Loaded optimizer state from pretrained checkpoint (momentum buffers only, LRs reset)
+Downloading https://huggingface.co/api/datasets/HuggingFaceTB/smol-smoltalk/parquet/default/train/0.parquet ...
+Downloading https://huggingface.co/api/datasets/HuggingFaceTB/smol-smoltalk/parquet/default/train/1.parquet ...
+Downloading https://huggingface.co/api/datasets/HuggingFaceTB/smol-smoltalk/parquet/default/train/2.parquet ...
+Downloading https://huggingface.co/api/datasets/HuggingFaceTB/smol-smoltalk/parquet/default/train/3.parquet ...
+Training mixture: 460,341 rows (MMLU x0, GSM8K x0)
+Downloading https://huggingface.co/api/datasets/HuggingFaceTB/smol-smoltalk/parquet/default/test/0.parquet ...
+Downloading https://huggingface.co/api/datasets/cais/mmlu/parquet/all/test/0.parquet ...
+Downloading https://huggingface.co/api/datasets/openai/gsm8k/parquet/main/test/0.parquet ...
+Step 00000 | Validation bpb: 0.7543
+step 00001 (3.40%) | loss: 1.264791 | lrm: 1.00 | dt: 24880.39ms | tok/sec: 10,536 | mfu: 2.59 | epoch: 1 | total time: 0.00m
+step 00002 (6.60%) | loss: 1.765388 | lrm: 1.00 | dt: 852.83ms | tok/sec: 307,382 | mfu: 75.51 | epoch: 1 | total time: 0.00m
+step 00003 (9.80%) | loss: 2.098407 | lrm: 1.00 | dt: 853.55ms | tok/sec: 307,121 | mfu: 75.44 | epoch: 1 | total time: 0.00m
+step 00004 (13.00%) | loss: 2.202634 | lrm: 1.00 | dt: 855.51ms | tok/sec: 306,417 | mfu: 75.27 | epoch: 1 | total time: 0.00m
+step 00005 (16.20%) | loss: 2.248955 | lrm: 1.00 | dt: 857.08ms | tok/sec: 305,855 | mfu: 75.13 | epoch: 1 | total time: 0.00m
+step 00006 (19.40%) | loss: 2.302297 | lrm: 1.00 | dt: 856.44ms | tok/sec: 306,086 | mfu: 75.19 | epoch: 1 | total time: 0.00m
+step 00007 (22.60%) | loss: 2.324207 | lrm: 1.00 | dt: 857.66ms | tok/sec: 305,649 | mfu: 75.08 | epoch: 1 | total time: 0.00m
+step 00008 (25.80%) | loss: 2.346948 | lrm: 1.00 | dt: 856.25ms | tok/sec: 306,152 | mfu: 75.21 | epoch: 1 | total time: 0.00m
+step 00009 (29.00%) | loss: 2.382757 | lrm: 1.00 | dt: 856.78ms | tok/sec: 305,964 | mfu: 75.16 | epoch: 1 | total time: 0.00m
+step 00010 (32.20%) | loss: 2.372404 | lrm: 1.00 | dt: 857.37ms | tok/sec: 305,753 | mfu: 75.11 | epoch: 1 | total time: 0.00m
+step 00011 (35.40%) | loss: 2.369740 | lrm: 1.00 | dt: 858.52ms | tok/sec: 305,342 | mfu: 75.01 | epoch: 1 | total time: 0.01m
+step 00012 (38.60%) | loss: 2.313262 | lrm: 1.00 | dt: 858.94ms | tok/sec: 305,193 | mfu: 74.97 | epoch: 1 | total time: 0.03m
+step 00013 (41.80%) | loss: 2.316242 | lrm: 1.00 | dt: 858.72ms | tok/sec: 305,274 | mfu: 74.99 | epoch: 1 | total time: 0.04m
+step 00014 (45.00%) | loss: 2.298987 | lrm: 1.00 | dt: 863.17ms | tok/sec: 303,698 | mfu: 74.60 | epoch: 1 | total time: 0.06m
+step 00015 (48.20%) | loss: 2.271445 | lrm: 1.00 | dt: 856.89ms | tok/sec: 305,925 | mfu: 75.15 | epoch: 1 | total time: 0.07m
+step 00016 (51.40%) | loss: 2.232060 | lrm: 0.97 | dt: 856.81ms | tok/sec: 305,951 | mfu: 75.16 | epoch: 1 | total time: 0.09m
+step 00017 (54.60%) | loss: 2.232342 | lrm: 0.91 | dt: 857.43ms | tok/sec: 305,733 | mfu: 75.10 | epoch: 1 | total time: 0.10m
+step 00018 (57.80%) | loss: 2.219051 | lrm: 0.84 | dt: 857.89ms | tok/sec: 305,568 | mfu: 75.06 | epoch: 1 | total time: 0.11m
+step 00019 (61.00%) | loss: 2.180968 | lrm: 0.78 | dt: 857.00ms | tok/sec: 305,884 | mfu: 75.14 | epoch: 1 | total time: 0.13m
+step 00020 (64.20%) | loss: 2.169767 | lrm: 0.72 | dt: 859.61ms | tok/sec: 304,957 | mfu: 74.91 | epoch: 1 | total time: 0.14m
+step 00021 (67.40%) | loss: 2.152795 | lrm: 0.65 | dt: 858.11ms | tok/sec: 305,489 | mfu: 75.04 | epoch: 1 | total time: 0.16m
+step 00022 (70.60%) | loss: 2.152152 | lrm: 0.59 | dt: 858.09ms | tok/sec: 305,498 | mfu: 75.05 | epoch: 1 | total time: 0.17m
+step 00023 (73.80%) | loss: 2.155169 | lrm: 0.52 | dt: 858.69ms | tok/sec: 305,282 | mfu: 74.99 | epoch: 1 | total time: 0.19m
+step 00024 (77.00%) | loss: 2.149770 | lrm: 0.46 | dt: 857.45ms | tok/sec: 305,724 | mfu: 75.10 | epoch: 1 | total time: 0.20m
+step 00025 (80.20%) | loss: 2.152529 | lrm: 0.40 | dt: 858.70ms | tok/sec: 305,279 | mfu: 74.99 | epoch: 1 | total time: 0.21m
+step 00026 (83.40%) | loss: 2.150689 | lrm: 0.33 | dt: 858.43ms | tok/sec: 305,374 | mfu: 75.02 | epoch: 1 | total time: 0.23m
+step 00027 (86.60%) | loss: 2.172171 | lrm: 0.27 | dt: 857.98ms | tok/sec: 305,534 | mfu: 75.05 | epoch: 1 | total time: 0.24m
+step 00028 (89.80%) | loss: 2.166057 | lrm: 0.20 | dt: 858.15ms | tok/sec: 305,474 | mfu: 75.04 | epoch: 1 | total time: 0.26m
+step 00029 (93.00%) | loss: 2.135715 | lrm: 0.14 | dt: 857.75ms | tok/sec: 305,619 | mfu: 75.08 | epoch: 1 | total time: 0.27m
+step 00030 (96.20%) | loss: 2.120850 | lrm: 0.08 | dt: 858.46ms | tok/sec: 305,364 | mfu: 75.01 | epoch: 1 | total time: 0.29m
+step 00031 (99.40%) | loss: 2.113759 | lrm: 0.01 | dt: 859.54ms | tok/sec: 304,982 | mfu: 74.92 | epoch: 1 | total time: 0.30m
+step 00032 (102.60%) | loss: 2.116690 | lrm: -0.05 | dt: 858.57ms | tok/sec: 305,326 | mfu: 75.00 | epoch: 1 | total time: 0.31m
+Step 00032 | Validation bpb: 0.6285
+2026-08-11 17:50:29,379 - nanochat.checkpoint_manager - INFO - Saved model parameters to: /root/nanochat_cache/chatsft_checkpoints/a10/model_000032.pt
+2026-08-11 17:50:29,379 - nanochat.checkpoint_manager - INFO - Saved metadata to: /root/nanochat_cache/chatsft_checkpoints/a10/meta_000032.json
+2026-08-11 17:50:29,693 - nanochat.checkpoint_manager - INFO - Saved optimizer state to: /root/nanochat_cache/chatsft_checkpoints/a10/optim_000032_rank0.pt
+Peak memory usage: 3540.40MiB
+Total training time: 0.31m
+Minimum validation bpb: 0.6285
+sync_checkpoints: base_dir=/root/nanochat_cache remote=gdrive: interval=120s once=True
+[2026-08-11 17:50:32] OK   tokenizer -> gdrive:/tokenizer
+[2026-08-11 17:50:34] OK   base_checkpoints -> gdrive:/base_checkpoints
+[2026-08-11 17:51:24] OK   chatsft_checkpoints -> gdrive:/chatsft_checkpoints
+Autodetected device type: cuda
+2026-08-11 17:51:28,187 - nanochat.common - INFO - Distributed world size: 1
+2026-08-11 17:51:28,187 - nanochat.checkpoint_manager - INFO - Loading model from /root/nanochat_cache/chatsft_checkpoints/a10 with step 32
+2026-08-11 17:51:28,523 - nanochat.checkpoint_manager - INFO - Building model with config: {'sequence_len': 2048, 'vocab_size': 32768, 'n_layer': 7, 'n_head': 3, 'n_kv_head': 3, 'n_embd': 384, 'window_pattern': 'L'}
+
+NanoChat Interactive Mode
+--------------------------------------------------
+Type 'quit' or 'exit' to end the conversation
+Type 'clear' to start a new conversation
+--------------------------------------------------
+
+Assistant: To solve this problem, let's break it down into its constituent parts. The key idea is to understand the underlying structure of the data and identify any patterns or trends that may be influencing the results. This involves using statistical methods to analyze the relationships between variables.
+
+The goal of this analysis is to uncover outliers in the data, which can affect the validity of a decision making process. For example:
+
+Suppose we're interested in analyzing the relationship between two variables over time. We want to determine whether there are significant changes in the nature of the variable or if there are other factors that contribute to these changes. By examining the relationships subtly, we can gain insights into the overall pattern of the relationship.
+
+We also need to examine the correlation coefficients, which measures how strong or weak a linear relationship is. If one predictor variable is strongly correlated with another, a correlation coefficient must be zero. However, if the correlation is close enough, we know that for a simple linear relationship, the strength of the linear relationship between the variables remains constant.
+
+Additionally, considering the possible interactions between the predictor variables and their own effects on the outcome, we could consider alternative solutions such as increasing the number of predictor variables by 7-10 years or increasing the amount of predictor variable by 2-3
+Autodetected device type: cuda
+2026-08-11 17:51:35,842 - nanochat.common - INFO - Distributed world size: 1
+2026-08-11 17:51:35,842 - nanochat.checkpoint_manager - INFO - Loading model from /root/nanochat_cache/chatsft_checkpoints/a10 with step 32
+2026-08-11 17:51:36,145 - nanochat.checkpoint_manager - INFO - Building model with config: {'sequence_len': 2048, 'vocab_size': 32768, 'n_layer': 7, 'n_head': 3, 'n_kv_head': 3, 'n_embd': 384, 'window_pattern': 'L'}
+
+NanoChat Interactive Mode
+--------------------------------------------------
+Type 'quit' or 'exit' to end the conversation
+Type 'clear' to start a new conversation
+--------------------------------------------------
+
+Assistant: The name of the city, known as "I," is a Greek philosopher named after his father who first identified it as an ancient city. The name suggests that I was born and raised in the 14th century, with the pharaoh, Elijah, and the land itself. In its early days, I would have been called to refer to my wife, Emily, and children. I was also a great explorer, who had discovered new discoveries about the natural world around me.
+
+In addition, I've spent years studying the works of philosophers like Aristotle, Socrates, and Plato, who played significant roles in shaping the city's history. From there, I'd become part of the great thinkers who established the foundations of modern philosophy, such as philosophers such as Aristotelian philosophy, the theory of relativity, and epistemology. My name began as a result of the ideas of logic and philosophy, which were often referred to by philosophers as "psychological genius."
+
+In contrast, I became one of the most skilled mathematicians, including the mathematician Leonhard Euler, who first proved that the concept of "causality" can be generalized to other areas of mathematics, such example: number theory, number theory and
+Autodetected device type: cuda
+2026-08-11 17:51:43,479 - nanochat.common - INFO - Distributed world size: 1
+2026-08-11 17:51:43,480 - nanochat.checkpoint_manager - INFO - Loading model from /root/nanochat_cache/chatsft_checkpoints/a10 with step 32
+2026-08-11 17:51:43,783 - nanochat.checkpoint_manager - INFO - Building model with config: {'sequence_len': 2048, 'vocab_size': 32768, 'n_layer': 7, 'n_head': 3, 'n_kv_head': 3, 'n_embd': 384, 'window_pattern': 'L'}
+Downloading https://huggingface.co/api/datasets/allenai/ai2_arc/parquet/ARC-Easy/test/0.parquet ...
+Final: 595/2376 (25.04%)
+ARC-Easy accuracy: 25.04%
+Downloading https://huggingface.co/api/datasets/allenai/ai2_arc/parquet/ARC-Challenge/test/0.parquet ...
+Final: 267/1172 (22.78%)
+ARC-Challenge accuracy: 22.78%
+Final: 3221/14042 (22.94%)
+MMLU accuracy: 22.94%
+Rank 0 | 0/1319 (0.00%)
+==================================================
+Final: 0/1319 (0.00%)
+GSM8K accuracy: 0.00%
+Downloading https://huggingface.co/api/datasets/openai/openai_humaneval/parquet/openai_humaneval/test/0.parquet ...
+Rank 0 | 0/164 (0.00%)
+==================================================
+Final: 0/164 (0.00%)
+HumanEval accuracy: 0.00%
+ChatCORE metric: -0.0113
+Autodetected device type: cuda
+2026-08-11 18:38:01,792 - nanochat.common - INFO - Distributed world size: 1
+2026-08-11 18:38:01,793 - nanochat.checkpoint_manager - INFO - Loading model from /root/nanochat_cache/chatsft_checkpoints/a10 with step 32
+2026-08-11 18:38:02,107 - nanochat.checkpoint_manager - INFO - Building model with config: {'sequence_len': 2048, 'vocab_size': 32768, 'n_layer': 7, 'n_head': 3, 'n_kv_head': 3, 'n_embd': 384, 'window_pattern': 'L'}
+[... BLiMP per-category output, 67 categories, full run ...]
+
+=== BLiMP overall: 72.13% across 67 categories ===
+(50% = chance, ~96.4% = human agreement per Warstadt et al. 2020)
+{
+  "adjunct_island": 0.777,
+  "anaphor_gender_agreement": 0.738,
+  "anaphor_number_agreement": 0.968,
+  "animate_subject_passive": 0.67,
+  "animate_subject_trans": 0.784,
+  "causative": 0.709,
+  "complex_NP_island": 0.565,
+  "coordinate_structure_constraint_complex_left_branch": 0.551,
+  "coordinate_structure_constraint_object_extraction": 0.61,
+  "determiner_noun_agreement_1": 0.95,
+  "determiner_noun_agreement_2": 0.915,
+  "determiner_noun_agreement_irregular_1": 0.883,
+  "determiner_noun_agreement_irregular_2": 0.899,
+  "determiner_noun_agreement_with_adj_2": 0.865,
+  "determiner_noun_agreement_with_adj_irregular_1": 0.84,
+  "determiner_noun_agreement_with_adj_irregular_2": 0.801,
+  "determiner_noun_agreement_with_adjective_1": 0.892,
+  "distractor_agreement_relational_noun": 0.88,
+  "distractor_agreement_relative_clause": 0.767,
+  "drop_argument": 0.725,
+  "ellipsis_n_bar_1": 0.617,
+  "ellipsis_n_bar_2": 0.908,
+  "existential_there_object_raising": 0.737,
+  "existential_there_quantifiers_1": 0.964,
+  "existential_there_quantifiers_2": 0.427,
+  "existential_there_subject_raising": 0.857,
+  "expletive_it_object_raising": 0.717,
+  "inchoative": 0.618,
+  "intransitive": 0.695,
+  "irregular_past_participle_adjectives": 0.901,
+  "irregular_past_participle_verbs": 0.699,
+  "irregular_plural_subject_verb_agreement_1": 0.881,
+  "irregular_plural_subject_verb_agreement_2": 0.879,
+  "left_branch_island_echo_question": 0.306,
+  "left_branch_island_simple_question": 0.621,
+  "matrix_question_npi_licensor_present": 0.448,
+  "npi_present_1": 0.503,
+  "npi_present_2": 0.53,
+  "only_npi_licensor_present": 0.752,
+  "only_npi_scope": 0.545,
+  "passive_1": 0.789,
+  "passive_2": 0.786,
+  "principle_A_c_command": 0.747,
+  "principle_A_case_1": 0.999,
+  "principle_A_case_2": 0.872,
+  "principle_A_domain_1": 0.864,
+  "principle_A_domain_2": 0.649,
+  "principle_A_domain_3": 0.558,
+  "principle_A_reconstruction": 0.527,
+  "regular_plural_subject_verb_agreement_1": 0.876,
+  "regular_plural_subject_verb_agreement_2": 0.887,
+  "sentential_negation_npi_licensor_present": 0.963,
+  "sentential_negation_npi_scope": 0.268,
+  "sentential_subject_island": 0.428,
+  "superlative_quantifiers_1": 0.65,
+  "superlative_quantifiers_2": 0.579,
+  "tough_vs_raising_1": 0.586,
+  "tough_vs_raising_2": 0.801,
+  "transitive": 0.761,
+  "wh_island": 0.555,
+  "wh_questions_object_gap": 0.703,
+  "wh_questions_subject_gap": 0.875,
+  "wh_questions_subject_gap_long_distance": 0.877,
+  "wh_vs_that_no_gap": 0.934,
+  "wh_vs_that_no_gap_long_distance": 0.926,
+  "wh_vs_that_with_gap": 0.286,
+  "wh_vs_that_with_gap_long_distance": 0.189
+}

@@ -67,14 +67,16 @@ hardware, understand every layer of it, and repeat it for Russian.
   their params into embeddings (`vocab_size=32768` was tuned upstream for
   much bigger models) — A9/A10 test reallocating that budget, sized
   against `d6`. **A10** (`--aspect-ratio=48 --depth=7`, same width as `d6`
-  but 7 layers instead of 6, 87.88M params): **pretrain done**, on a
-  rented Vast.ai RTX 5070 Ti instead of Kaggle — 28.74 min (measured
-  **~9.6x faster** than `d6`'s Kaggle T4x2 run), **min val_bpb 0.977060**,
-  beating both `d4` and `d6`. SFT/full eval not yet confirmed complete —
-  see [docs/RESEARCH_LOG.md](docs/RESEARCH_LOG.md). **A9**
-  (`--vocab-size=16384 --depth=7`, 72.35M params, needs a tokenizer
-  retrain): queued next, likely well under an hour on the same rented GPU
-  given A10's measured speedup.
+  but 7 layers instead of 6, 87.88M params): **done**, on a rented Vast.ai
+  RTX 5070 Ti instead of Kaggle — pretrain 28.74 min (measured **~9.6x
+  faster** than `d6`'s Kaggle T4x2 run), **min val_bpb 0.977060** and
+  **BLiMP 72.13%**, both the best of the three English models so far. SFT
+  bpb (0.6285) landed *between* `d4` and `d6`, not a clean win on every
+  metric — see [docs/RESEARCH_LOG.md](docs/RESEARCH_LOG.md) for the honest
+  breakdown. **A9** (`--vocab-size=16384 --depth=7`, 72.35M params, needs a
+  tokenizer retrain): notebook ready
+  ([vastai/vastai_train_a9.ipynb](vastai/vastai_train_a9.ipynb)), not run
+  yet.
 - **Phase 2 (Russian): deferred** until the English side is judged "done
   enough" within the free-tier compute budget.
 
@@ -227,19 +229,21 @@ and adds two eval methods actually informative at this scale:
 | pretrain tokens | 230,686,720 (880 steps, ratio=20) | 463,994,880 (1770 steps, ratio=20) | 499,384,320 (1905 steps, ratio=20) |
 | pretrain wall-clock | 64.1 min | 255.7 min | **28.74 min (~9.6x faster than `d6`)** |
 | **pretrain min val_bpb** | 1.0994 (from 3.85 at init) | 0.9945 (from 3.17 at init) | **0.977060** |
-| SFT | 1 epoch SmolTalk, 8.3 min | 1 epoch SmolTalk, 7.0 min | not yet confirmed complete |
-| **SFT min val_bpb** | 0.6616 | **0.6169** | pending |
-| ARC-Easy / ARC-Challenge / MMLU | 25.34% / 22.61% / 22.90% | 24.87% / 22.44% / 22.94% | pending |
-| GSM8K / HumanEval | 0.08% / 0.00% | 0.00% / 0.00% | pending |
-| ChatCORE | -0.0109 | -0.0127 | pending (base-model CORE: 0.0747, different methodology, not directly comparable) |
-| **BLiMP (grammar, 67×1000 pairs)** | 66.46% | **70.31%** | pending |
-| repetition loops, 30 generations (no fix / with fix) | 18/30 / 0/30 | 8/30 / 0/30 | pending |
+| SFT | 1 epoch SmolTalk, 8.3 min | 1 epoch SmolTalk, 7.0 min | 32/32 steps, 0.31 min |
+| **SFT min val_bpb** | 0.6616 | **0.6169** | 0.6285 (between `d4`/`d6`) |
+| ARC-Easy / ARC-Challenge / MMLU | 25.34% / 22.61% / 22.90% | 24.87% / 22.44% / 22.94% | 25.04% / 22.78% / 22.94% |
+| GSM8K / HumanEval | 0.08% / 0.00% | 0.00% / 0.00% | 0.00% / 0.00% |
+| ChatCORE | -0.0109 | -0.0127 | -0.0113 (base-model CORE: 0.0747, different methodology, not directly comparable) |
+| **BLiMP (grammar, 67×1000 pairs)** | 66.46% | 70.31% | **72.13%** |
+| repetition loops, 30 generations (no fix / with fix) | 18/30 / 0/30 | 8/30 / 0/30 | not run yet |
 | RL on GSM8K (480 examples) | not run | reward ≈ 0 on 508/510 steps | not run |
 
-`a10` pretrain min val_bpb (0.977060) beats both `d4` and `d6` — a real, if modest, improvement
-from "more depth at fixed width". SFT and the full eval suite for `a10` are still pending —
-see [docs/RESEARCH_LOG.md](docs/RESEARCH_LOG.md) and
-[vastai/vastai_eval_a10.ipynb](vastai/vastai_eval_a10.ipynb).
+`a10` has the best pretrain bpb (0.977060) *and* the best BLiMP (72.13%) of the three — but its
+SFT bpb (0.6285) lands between `d4` and `d6`, not a clean sweep, and chat_eval/ChatCORE are
+noise-level identical to the other two. "More depth at fixed width" clearly helps grammar and
+pretrain quality, doesn't obviously help SFT quality or downstream tasks — see
+[docs/RESEARCH_LOG.md](docs/RESEARCH_LOG.md) for the full honest breakdown, including a
+qualitative chat test that reads *less* coherent than `d6`'s.
 
 Chance baselines: ARC/MMLU 25%, GSM8K/HumanEval 0%, ChatCORE 0, BLiMP 50%.
 Full per-run numbers, methodology, and honest interpretation (including

@@ -751,6 +751,56 @@ another lossy terminal paste (this project is switching to real downloaded Jupyt
 for Vast.ai runs going forward, same convention as `kaggle/runs/` -- see that notebook and
 `vastai/runs/README.md`).
 
+## 2026-08-11 -- A10 SFT + full eval complete: best BLiMP of the three models, SFT bpb doesn't follow pretrain bpb
+
+Running `vastai_eval_a10.ipynb` hit its own round of infra bugs before producing real numbers,
+each fixed and logged rather than worked around silently (see the notebook's git history):
+`rclone copy` of the whole `base_checkpoints/a10` Drive folder re-triggered a disk-full crash
+(pulled all 12 saved steps instead of just the one SFT needs -- fixed with `--include`); bare
+`!python3` in a shell cell resolved to a different interpreter than the one Cell 1 installed
+deps into, so `chat_sft.py` failed with `ModuleNotFoundError: torch`/`wandb` (fixed by using
+`!{sys.executable}` everywhere); Jupyter's own notebook-save kept failing with "database is
+locked" (disk had been full recently), so the executed notebook's baked-in output never made
+it to disk -- archived the pasted console output as a plain `.log` instead
+(`vastai/runs/2026-08-11_a10_sft_eval_console.log`) rather than pretending a notebook artifact
+exists that doesn't.
+
+**SFT**: 32/32 steps (SmolTalk bestfit-packing exhausted the mixture in 32 steps at this
+`device_batch_size`/`seq_len`, same phenomenon as `d4`'s 125-step cap), 0.31 min, peak memory
+3,540MiB, **min val_bpb 0.6285**. Sits *between* `d4` (0.6616) and `d6` (0.6169) -- notably,
+**`a10`'s pretrain bpb was the best of the three (0.977060) but its SFT bpb is worse than
+`d6`'s**, so "more depth at fixed width" doesn't cleanly carry over from pretrain quality to
+SFT quality. Worth remembering as a real, measured non-monotonicity rather than assuming
+pretrain bpb predicts everything downstream.
+
+**Chat test** (2 prompts, repetition-penalty fix active): both grammatically fluent but neither
+answers the actual question -- "hi" produces a paragraph about correlation coefficients and
+outlier analysis; "What is your name?" invents a rambling, self-contradictory biography
+("a Greek philosopher... born in the 14th century... my wife, Emily... Leonhard Euler...").
+Subjectively **less coherent than `d6`'s SFT chat test** (which also rambled but stayed
+roughly on-topic) -- consistent with the SFT bpb result above, though this is a 2-prompt
+spot-check, not the systematic `eval_repetition.py` metric (not run yet for `a10` in this
+session -- the notebook cell was added afterward, see the open item below).
+
+**`chat_eval.py`** (full, unsampled): ARC-Easy 25.04% (595/2376), ARC-Challenge 22.78%
+(267/1172), MMLU 22.94% (3221/14042), GSM8K 0.00% (0/1319), HumanEval 0.00% (0/164),
+**ChatCORE -0.0113** -- at/below the random-guessing baseline on every task, same pattern as
+`d4`/`d6`, confirms once again that this scale range doesn't buy knowledge/reasoning capability
+regardless of which architecture lever is pulled.
+
+**`eval_blimp.py`** (full, 67 x 1000 pairs): **72.13% overall** -- the best of all three models
+measured so far (`d4` 66.46%, `d6` 70.31%, `a10` 72.13%), and the one metric where `a10`'s
+pretrain-bpb advantage *does* clearly show up downstream. Consistent with the established
+BLiMP-high/chat_eval-low split, now with three data points instead of two: extra depth at fixed
+width keeps buying grammatical competence, same direction as the `d4`-to-`d6` width increase did.
+
+**Open items carried forward**: `eval_repetition.py` for `a10` still hasn't been run (now in
+the notebook, just not executed this session) -- needed before A8's final comparison table can
+call itself complete. A9 is next, via the new `vastai/vastai_train_a9.ipynb` (full
+tokenizer-retrain -> pretrain -> SFT -> eval pipeline, with `vastai/prune_checkpoints.py`
+running in the background to keep only the last 3 local steps -- direct fix for the disk-full
+pattern hit twice now on `a10`).
+
 ## Open questions / next up
 - Consider a tied-embeddings experiment (`wte`==`lm_head`): at `d4`,
   embeddings are ~46% of total params (untied by upstream design, see

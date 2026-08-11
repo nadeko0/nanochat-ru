@@ -5,6 +5,46 @@ for the reasoning/dead-ends behind these changes, [docs/PROJECT_PLAN.md](docs/PR
 for the tracked checklist, and [kaggle/runs/](kaggle/runs/) for the full-output notebooks
 behind each result.
 
+## 2026-08-11 (cont'd, 4)
+
+- **A10 pretrain complete on Vast.ai (real numbers)**: 1905 steps, 499.4M
+  tokens (ratio=20), 28.74 min on a rented RTX 5070 Ti, min val_bpb
+  **0.977060** -- beats both `d4` (1.0994) and `d6` (0.9945). Measured
+  ~9.6x speedup vs `d6`'s Kaggle T4x2 pretrain, confirming the earlier
+  per-step estimate on the full run. SFT not yet confirmed complete (the
+  recovered console log ends right after pretrain). Archived the raw
+  console log to `vastai/runs/2026-08-11_a10_pretrain_console.log` and
+  added `vastai/runs/README.md` (mirrors `kaggle/runs/README.md`).
+- Added `vastai/vastai_eval_a10.ipynb`: real downloadable Jupyter notebook
+  (clean source template) for running SFT/`chat_eval.py`/`eval_blimp.py`
+  on `a10` via the browser Jupyter app already running on any Vast.ai
+  instance -- going forward, Vast.ai runs archive as real notebooks like
+  `kaggle/runs/`, not lossy terminal-buffer pastes. Starts with a disk/
+  cache cleanup cell (uv/pip/cargo caches, drops local `base_checkpoints`
+  since it's not needed for eval and is already on Drive) given the
+  disk-full crash already hit once on this project. Credentials are never
+  stored in the file -- prompted interactively via `getpass` only if the
+  checkpoint isn't already cached locally.
+
+## 2026-08-11 (cont'd, 3)
+
+- **A10 running on Vast.ai (RTX 5070 Ti)**: real measured speedup vs Kaggle
+  T4x2, ~9-10x faster per training step (dt~900ms vs `d6`'s measured
+  8.67s/step), well above the earlier 3-6x hardware-spec guess. Hit a disk-
+  full crash at step 1000/1905 (`save_checkpoint` keeps every `--save-every`
+  interval forever, no pruning -- filled the rented box's 16GB disk),
+  corrupting one in-progress optimizer-checkpoint write. Recovered by
+  deleting the corrupted step and old local checkpoints (already synced to
+  Drive), resuming from the last good step (900) with a larger
+  `--save-every` to avoid refilling disk. See RESEARCH_LOG.md for the full
+  diagnosis.
+- **3rd deviation from vendored code**: `nanochat/common.py`'s
+  `get_peak_flops`/`get_peak_bandwidth` tables didn't recognize the RTX 5070
+  Ti (or 4070 Ti/5070) -- added verified (not guessed) dense BF16 TFLOPS +
+  memory bandwidth entries for the GPUs `docs/VASTAI_SETUP.md` recommends
+  renting. Informational only (`bf16_mfu` display), doesn't affect training
+  correctness.
+
 ## 2026-08-11 (cont'd, 2)
 
 - Added `vastai/run_a10.sh` + `docs/VASTAI_SETUP.md`: single-command A10 pipeline

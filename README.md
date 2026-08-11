@@ -63,15 +63,18 @@ hardware, understand every layer of it, and repeat it for Russian.
   from at ~0% baseline GSM8K accuracy. RL sharpens existing capability
   rather than creating it; there wasn't any here to sharpen. Full numbers:
   [docs/RESEARCH_LOG.md](docs/RESEARCH_LOG.md).
-- **A9/A10 architecture experiments, next.** Both `d4` and `d6` put
-  85-91% of their params into embeddings (`vocab_size=32768` was tuned
-  upstream for much bigger models) — A9/A10 test reallocating that budget,
-  sized against `d6`. **A10** (`--aspect-ratio=48 --depth=7`, same width as
-  `d6` but 7 layers instead of 6, 87.88M params): notebook ready
-  ([kaggle/kaggle_train_a10.ipynb](kaggle/kaggle_train_a10.ipynb)), ~5.2h,
-  not run yet. **A9** (`--vocab-size=16384 --depth=7`, 72.35M params,
-  needs a tokenizer retrain): queued after, ~7.9h — the two together
-  exceed one 12h Kaggle session, so running as separate nights.
+- **A9/A10 architecture experiments.** Both `d4` and `d6` put 85-91% of
+  their params into embeddings (`vocab_size=32768` was tuned upstream for
+  much bigger models) — A9/A10 test reallocating that budget, sized
+  against `d6`. **A10** (`--aspect-ratio=48 --depth=7`, same width as `d6`
+  but 7 layers instead of 6, 87.88M params): **pretrain done**, on a
+  rented Vast.ai RTX 5070 Ti instead of Kaggle — 28.74 min (measured
+  **~9.6x faster** than `d6`'s Kaggle T4x2 run), **min val_bpb 0.977060**,
+  beating both `d4` and `d6`. SFT/full eval not yet confirmed complete —
+  see [docs/RESEARCH_LOG.md](docs/RESEARCH_LOG.md). **A9**
+  (`--vocab-size=16384 --depth=7`, 72.35M params, needs a tokenizer
+  retrain): queued next, likely well under an hour on the same rented GPU
+  given A10's measured speedup.
 - **Phase 2 (Russian): deferred** until the English side is judged "done
   enough" within the free-tier compute budget.
 
@@ -137,9 +140,13 @@ than copied cell by cell:
   experiments (`aspect_ratio`/`vocab_size` reallocation, sized against `d6`'s budget — see
   [docs/RESEARCH_LOG.md](docs/RESEARCH_LOG.md)). A10 ready to run; A9 queued after.
 - [vastai/run_a10.sh](vastai/run_a10.sh) + [docs/VASTAI_SETUP.md](docs/VASTAI_SETUP.md) —
-  same A10 pipeline, adapted for a rented single/dual-GPU box (Vast.ai) instead of Kaggle,
-  to test whether Ampere/Ada hardware (bf16, Flash Attention — unavailable on Kaggle's T4)
-  is meaningfully faster. Speedup not measured yet, only estimated.
+  same A10 pipeline, adapted for a rented single/dual-GPU box (Vast.ai) instead of Kaggle.
+  **Measured, not estimated**: ~9.6x faster pretrain than `d6`'s Kaggle T4x2 run (bf16 tensor
+  cores + no cross-GPU DDP sync — Flash Attention 3 still unavailable even on this GPU).
+- [vastai/vastai_eval_a10.ipynb](vastai/vastai_eval_a10.ipynb) — SFT + full `chat_eval.py`/
+  `eval_blimp.py` for `a10`, run via the browser Jupyter app on the same Vast.ai instance
+  (real downloadable notebook, archived like `kaggle/runs/` — see
+  [vastai/runs/](vastai/runs/)).
 
 1. **Local**: edit code, config, or a notebook here; commit to git; push to
    GitHub.
@@ -213,20 +220,26 @@ and adds two eval methods actually informative at this scale:
 
 ### English results
 
-| | `d4` (2026-08-10) | `d6` (2026-08-10/11) |
-|---|---|---|
-| depth / params | 4 / 36.70M | 6 / 73.53M |
-| pretrain tokens | 230,686,720 (880 steps, ratio=20) | 463,994,880 (1770 steps, ratio=20) |
-| pretrain hardware | Kaggle T4 x2, 64.1 min | Kaggle T4 x2, 255.7 min |
-| **pretrain min val_bpb** | 1.0994 (from 3.85 at init) | **0.9945** (from 3.17 at init) |
-| SFT | 1 epoch SmolTalk, 8.3 min | 1 epoch SmolTalk, 7.0 min |
-| **SFT min val_bpb** | 0.6616 | **0.6169** |
-| ARC-Easy / ARC-Challenge / MMLU | 25.34% / 22.61% / 22.90% | 24.87% / 22.44% / 22.94% |
-| GSM8K / HumanEval | 0.08% / 0.00% | 0.00% / 0.00% |
-| ChatCORE | -0.0109 | -0.0127 |
-| **BLiMP (grammar, 67×1000 pairs)** | 66.46% | **70.31%** |
-| repetition loops, 30 generations (no fix / with fix) | 18/30 / 0/30 | 8/30 / 0/30 |
-| RL on GSM8K (480 examples) | not run | reward ≈ 0 on 508/510 steps |
+| | `d4` (2026-08-10) | `d6` (2026-08-10/11) | `a10` (2026-08-11) |
+|---|---|---|---|
+| depth / params | 4 / 36.70M | 6 / 73.53M | 7 / 87.88M |
+| hardware | Kaggle T4 x2 | Kaggle T4 x2 | rented Vast.ai RTX 5070 Ti |
+| pretrain tokens | 230,686,720 (880 steps, ratio=20) | 463,994,880 (1770 steps, ratio=20) | 499,384,320 (1905 steps, ratio=20) |
+| pretrain wall-clock | 64.1 min | 255.7 min | **28.74 min (~9.6x faster than `d6`)** |
+| **pretrain min val_bpb** | 1.0994 (from 3.85 at init) | 0.9945 (from 3.17 at init) | **0.977060** |
+| SFT | 1 epoch SmolTalk, 8.3 min | 1 epoch SmolTalk, 7.0 min | not yet confirmed complete |
+| **SFT min val_bpb** | 0.6616 | **0.6169** | pending |
+| ARC-Easy / ARC-Challenge / MMLU | 25.34% / 22.61% / 22.90% | 24.87% / 22.44% / 22.94% | pending |
+| GSM8K / HumanEval | 0.08% / 0.00% | 0.00% / 0.00% | pending |
+| ChatCORE | -0.0109 | -0.0127 | pending (base-model CORE: 0.0747, different methodology, not directly comparable) |
+| **BLiMP (grammar, 67×1000 pairs)** | 66.46% | **70.31%** | pending |
+| repetition loops, 30 generations (no fix / with fix) | 18/30 / 0/30 | 8/30 / 0/30 | pending |
+| RL on GSM8K (480 examples) | not run | reward ≈ 0 on 508/510 steps | not run |
+
+`a10` pretrain min val_bpb (0.977060) beats both `d4` and `d6` — a real, if modest, improvement
+from "more depth at fixed width". SFT and the full eval suite for `a10` are still pending —
+see [docs/RESEARCH_LOG.md](docs/RESEARCH_LOG.md) and
+[vastai/vastai_eval_a10.ipynb](vastai/vastai_eval_a10.ipynb).
 
 Chance baselines: ARC/MMLU 25%, GSM8K/HumanEval 0%, ChatCORE 0, BLiMP 50%.
 Full per-run numbers, methodology, and honest interpretation (including

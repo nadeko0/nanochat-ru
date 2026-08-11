@@ -72,16 +72,19 @@ reason.
       Requires retraining the tokenizer (different vocab_size). Estimated
       ~7.9h pretrain (calibrated from `d4`/`d6`'s measured FLOPs-to-wallclock
       rate). Queued for after A10 finishes (shares Kaggle GPU-hours budget).
-- [ ] A10. `--aspect-ratio` experiment, planned and notebook-ready. `--aspect-ratio=48
-      --depth=7` (default vocab_size=32768, reuses the existing tokenizer)
-      -> `model_dim=384` (**same width as `d6`**), 7 layers instead of 6 ->
-      **87.88M params**. Isolates "more depth at fixed width" from the
-      width change that also happened between `d4` and `d6`. Same
-      `--target-param-data-ratio=20` as every other run, for a clean
-      comparison. Estimated ~5.17h pretrain + SFT + quick eval, one
-      session. Notebook ready: `kaggle/kaggle_train_a10.ipynb` (model tag
-      `a10`, not `d7` -- that would collide with a *default*-aspect-ratio
-      depth=7 model, a different architecture). Not run yet.
+- [x] A10 (pretrain). `--aspect-ratio=48 --depth=7` (model_dim=384, same
+      width as `d6`, 7 layers instead of 6, 87.88M params) pretrained on a
+      rented Vast.ai RTX 5070 Ti instead of Kaggle (`vastai/run_a10.sh`).
+      1905/1905 steps, 499.4M tokens (ratio=20), **28.74 min** (measured
+      **~9.6x** faster than `d6`'s Kaggle T4x2 run), peak memory 5,386MiB.
+      **Min val_bpb: 0.977060** -- beats both `d4` (1.0994) and `d6`
+      (0.9945). Survived a disk-full crash at step 1000/1905 (resumed
+      cleanly from step 900, see RESEARCH_LOG.md). Full log:
+      `vastai/runs/2026-08-11_a10_pretrain_console.log`.
+- [ ] A10 (SFT + eval). Not yet confirmed complete -- the recovered console
+      log covers pretrain only. Next: run SFT + full `chat_eval.py`/
+      `eval_blimp.py` via `vastai/vastai_eval_a10.ipynb` (real downloadable
+      notebook, not another terminal paste) on the same instance.
 
 ### A-optional (stretch, only if there's budget left)
 
@@ -118,10 +121,12 @@ reason.
 
 ---
 
-Progress snapshot: as of 2026-08-11, Phase A: A1-A8(interim) done. Testing
-A10 on a rented single-GPU box (Vast.ai, `$5` funded, `vastai/run_a10.sh` +
-`docs/VASTAI_SETUP.md`) instead of Kaggle T4x2, hoping for a real speedup
-(unverified, ~3-6x guess from hardware specs) -- `kaggle/kaggle_train_a10.ipynb`
-stays as the Kaggle fallback if the rented box doesn't pan out. A9 queued
-after (~7.9h on T4x2, needs a tokenizer retrain, sized against `d6`'s
-budget). Phases B and C not started (deliberately deferred).
+Progress snapshot: as of 2026-08-11, Phase A: A1-A8(interim) done. A10
+pretrain done on a rented Vast.ai RTX 5070 Ti (~9.6x measured speedup vs
+Kaggle T4x2, new best min val_bpb 0.977060) -- SFT/eval for `a10` still
+pending, next up via `vastai/vastai_eval_a10.ipynb`.
+`kaggle/kaggle_train_a10.ipynb` stays as the Kaggle fallback. A9 queued
+after (~7.9h estimated on Kaggle T4x2, likely well under an hour on the
+same rented GPU given A10's measured speedup -- needs a tokenizer retrain,
+sized against `d6`'s budget). Phases B and C not started (deliberately
+deferred).

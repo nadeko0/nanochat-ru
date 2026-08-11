@@ -619,6 +619,138 @@ to the combined A9+A10 estimate (~13.1h), that's a 2.2-4.4h range -- the
 user's hoped-for "~3 hours to close both" sits inside that range but on
 the optimistic side, not a promise.
 
+## 2026-08-11 -- A10 on Vast.ai: real speedup measured, a disk-full crash, and a 3rd vendored-code deviation
+
+Rented a single RTX 5070 Ti on Vast.ai ($0.138/hr) and ran `vastai/run_a10.sh`
+manually over the browser-based Jupyter Terminal (couldn't get a literal
+`ssh -p PORT root@host` string out of the Vast.ai UI in the time available --
+the Instance Portal's own web dashboard/tunnels kept surfacing instead, so
+used that terminal in place of raw SSH; functionally equivalent, just typed
+into a browser tab instead of a local terminal).
+
+**Real speedup, measured this time, not estimated**: pretrain ran at
+~285-295k tok/sec, dt~900ms/step, vs `d6`'s measured 8.67s/step on Kaggle
+T4x2 (255.72min / 1770 steps) -- **~9-10x faster per step**, well above the
+3-6x guess from hardware specs. `bf16` + PyTorch SDPA (Flash Attention 3
+still unavailable even on this GPU -- `WARNING: Flash Attention 3 not
+available, using PyTorch SDPA fallback` -- so this speedup comes from bf16
+tensor cores and no cross-GPU DDP sync, not from FA3).
+
+### Bug: disk full at step 1000/1905, corrupted an in-progress checkpoint write
+
+`save_checkpoint()` in `nanochat/checkpoint_manager.py` has no retention
+policy -- every `--save-every=100` interval keeps `model_STEP.pt` +
+`meta_STEP.json` + `optim_STEP_rank0.pt` on disk forever (~627MB/checkpoint:
+215MB model + 383MB optimizer). 10 checkpoints (steps 100-1000) filled the
+rented box's 16GB disk exactly at step 1000's optimizer write:
+
+```
+RuntimeError: [enforce fail at inline_container.cc:858] . PytorchStreamWriter failed writing file data/7: file write failed
+RuntimeError: [enforce fail at inline_container.cc:664] . unexpected pos 226497792 vs 226497680
+```
+
+`model_001000.pt`/`meta_001000.json` had already written successfully before
+the optimizer write hit the full disk; `optim_001000_rank0.pt` was left at
+248MB instead of the expected ~402MB (confirmed truncated by comparing
+against the other steps' file sizes). The training process crashed (disk-full
+`torch.save` isn't caught anywhere), but the background `sync_checkpoints.py`
+poller kept running independently and pushed the truncated file to Drive 3
+more times before it was noticed and killed.
+
+Fixed by: killing the sync poller, deleting the corrupted step-1000 files
+both locally and on Drive (`rclone delete ... --include "*001000*"`, since
+`base_train.py`'s resume path picks the highest step it finds and would have
+re-downloaded the bad file otherwise), pruning all older local checkpoints
+except step 900 (already safely on Drive, freed disk from 16G/16G to
+5.2G free), then resuming manually with `--resume-from-step=900
+--save-every=300` (fewer future checkpoints -- ~4 more saves instead of ~9 --
+to avoid refilling the same 5.2GB headroom before the run finishes). Loss
+resumed exactly where it left off (3.4498 at step 900, matching the
+pre-crash trajectory), confirming the optimizer state restore was correct.
+Root cause is a real gap worth fixing later (checkpoint retention/pruning),
+not something to silently work around again if it recurs.
+
+### 3rd deviation from vendored code: added RTX 5070 Ti to get_peak_flops/get_peak_bandwidth
+
+`nanochat/common.py`'s hardcoded GPU tables (`get_peak_flops`,
+`get_peak_bandwidth`) didn't recognize "NVIDIA GeForce RTX 5070 Ti" (too new
+for the upstream table), so `bf16_mfu` printed as 0.00 all run --
+informational only, doesn't affect training correctness. Looked up real
+specs rather than guessing (consumer Blackwell dense tensor-core numbers
+aren't obvious from memory): 87.88 TFLOPS dense BF16/FP16 (280 5th-gen
+tensor cores), 896GB/s (16GB GDDR7, 256-bit). Cross-checked against the
+already-tabled RTX 5090 by tensor-core-count ratio (280/680 x 209.5e12 =
+86.3e12, matches the looked-up 87.88e12 within rounding) before trusting it.
+Also added the other two GPUs `docs/VASTAI_SETUP.md` explicitly recommends
+renting for this project (RTX 4070 Ti, RTX 5070 -- RTX 3090/4090/5090 were
+already in the upstream table): RTX 4070 Ti 80.18 TFLOPS dense/504GB/s, RTX
+5070 61.7 TFLOPS dense/672GB/s. The RTX 5070 number needed a second check --
+one source gave inconsistent FP16 (123.5) vs BF16 (61.7) figures for the
+same tensor cores, which shouldn't differ; cross-checked via tensor-core-
+count ratio against the now-verified 5070 Ti (192/280 x 87.88e12 = 60.3e12,
+matches 61.7e12, not 123.5e12) before trusting the lower number. Didn't add
+5080 or any Ampere/Ada data-center card not in this project's docs --
+guessing GPU FLOPS tables is exactly the kind of thing worth avoiding.
+Doesn't apply retroactively to the currently-running process (loaded at
+start), only future runs on these GPUs. This is the 3rd deviation from
+"unmodified vendored code" in this project (after `engine.py`'s repetition
+controls and `chat_rl.py`'s `--max-train-examples` flag), same policy:
+deliberate, logged, not silent.
+Sources: [WareDB RTX 5070 Ti specs](https://www.waredb.com/processor/nvidia-geforce-rtx-5070-ti),
+[VideoCardz RTX 5070/Ti specs](https://videocardz.com/newz/nvidia-confirms-full-geforce-rtx-5070-ti-specifications-featuring-gb203-and-gb205-gpus),
+[WareDB RTX 4070 Ti specs](https://www.waredb.com/processor/nvidia-geforce-rtx-4070-ti),
+[WareDB RTX 5070 specs](https://www.waredb.com/processor/nvidia-geforce-rtx-5070).
+
+## 2026-08-11 -- A10 pretrain complete on Vast.ai (real numbers, not estimates)
+
+Full console log recovered (`vastai/runs/2026-08-11_a10_pretrain_console.log`) covers the
+complete pretrain from the step-900 resume through to the final checkpoint save -- **SFT is
+not in this log** (the pasted console buffer ended right after pretrain finished; SFT either
+didn't run yet or its output wasn't captured). Recording what's actually confirmed rather than
+assuming SFT happened.
+
+**Pretrain result**: 1905/1905 steps, 499,384,320 tokens (`--target-param-data-ratio=20`,
+resumed once from step 900 after the disk-full crash), **28.74 min total training time** on a
+single rented RTX 5070 Ti, peak memory **5,386.32 MiB** (well under the 16GB disk-constrained
+box's VRAM, and notably lower than `d6`'s 7,960MiB Kaggle run -- smaller batch/no DDP replica
+overhead). **Min validation bpb: 0.977060** (monotonic decrease every eval: 1.050740 @step1000,
+1.025286 @step1250, 1.003059 @step1500, 0.984603 @step1750, 0.977060 @step1905 -- final = min).
+
+This **beats both `d4` (1.0994) and `d6` (0.9945)** -- a real, if modest (~1.75% vs `d6`),
+improvement, consistent with "more depth at fixed width" being a genuine lever, not just noise.
+
+**Speedup, measured on the full run this time** (not just per-step `dt`): `d6` did 464.0M
+tokens in 255.72 min on Kaggle T4x2 = 1.814M tok/min. `a10` did 499.4M tokens in 28.74 min on
+the rented RTX 5070 Ti = 17.38M tok/min. **~9.6x faster**, in the same range as the earlier
+per-step estimate (~9-10x), now confirmed end-to-end including the resume overhead, checkpoint
+saves, and Drive sync.
+
+**Bonus data point**: `base_train.py` runs nanochat's own CORE eval bundle automatically at
+the end of pretrain (hellaswag, arc_easy, arc_challenge, piqa, winogrande, boolq, etc.,
+few-shot, base model) -- something not previously captured for `d4`/`d6` (only `val_bpb` was
+logged for those). **CORE metric: 0.0747.** Individual task accuracies mostly near their
+respective chance baselines with a few standouts above it (piqa 61.4%, arc_easy 44.6%,
+commonsense_qa 37.2%), consistent with the "some real capability, no reliable knowledge" story
+already established via BLiMP/chat_eval on `d4`/`d6` -- though this uses a different
+methodology (few-shot, base model, not chat-formatted SFT model) so it isn't a clean
+apples-to-apples comparison to those numbers. Not going back to compute this for `d4`/`d6`
+right now (would need re-running their archived pretrain configs) -- flagged as a gap, not
+backfilled retroactively.
+
+Qualitative base-model completions logged at the end (pre-SFT, plain continuation, not
+chat-formatted) -- fluent but factually wrong across the board, same pattern as `d4`/`d6`'s
+chat-test transcripts: *"The capital of France is the French capital..."*, *"The chemical
+symbol of gold is silver..."*, *"The planets of the solar system are: Earth, Mars and
+Jupiter."* -- confirms this is a property of scale/data, not something A10's architecture
+change fixes.
+
+**Still open**: SFT for `a10` hasn't been confirmed complete (log doesn't cover it) -- next
+step is either getting the rest of the console output or re-running SFT via
+`vastai/vastai_eval_a10.ipynb`-style notebook for a clean, fully-captured artifact instead of
+another lossy terminal paste (this project is switching to real downloaded Jupyter notebooks
+for Vast.ai runs going forward, same convention as `kaggle/runs/` -- see that notebook and
+`vastai/runs/README.md`).
+
 ## Open questions / next up
 - Consider a tied-embeddings experiment (`wte`==`lm_head`): at `d4`,
   embeddings are ~46% of total params (untied by upstream design, see

@@ -27,4 +27,5 @@ See [docs/RESEARCH_LOG.md](../../docs/RESEARCH_LOG.md) for the reasoning behind
 each run's configuration and what was learned from the result, including dead
 ends and things that didn't work. See
 [docs/PROJECT_PLAN.md](../../docs/PROJECT_PLAN.md) for the checklist these
-runs map onto.
+runs map onto. Runs on a rented Vast.ai GPU (A10 onward) are archived separately
+in [vastai/runs/](../../vastai/runs/), same convention.

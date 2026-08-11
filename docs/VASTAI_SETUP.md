@@ -2,10 +2,14 @@
 
 Kaggle's free T4x2 is pre-Ampere (SM75): no bf16, no Flash Attention, and
 `nanochat` falls back to fp32 + PyTorch SDPA there (see the runtime warnings
-in every Kaggle run log). A rented Ampere/Ada-class GPU (RTX 4070 Ti/5070/
-4090, etc.) supports both, and is a single GPU (no DDP/cross-GPU sync
-overhead like the Kaggle T4x2 runs had) -- plausibly several times faster
-for the same work, though this hasn't actually been measured yet.
+in every Kaggle run log). A rented Ampere/Ada/Blackwell-class GPU (RTX
+4070 Ti/5070/4090/5070 Ti, etc.) supports bf16, and is a single GPU (no
+DDP/cross-GPU sync overhead like the Kaggle T4x2 runs had) -- **measured,
+not just plausible**: the A10 pretrain (RTX 5070 Ti) ran ~9.6x faster than
+`d6`'s Kaggle T4x2 pretrain (28.74 min vs 255.7 min for a comparable
+token count) -- see docs/RESEARCH_LOG.md. Flash Attention 3 was still
+unavailable even on the 5070 Ti (PyTorch SDPA fallback), so this speedup
+comes from bf16 tensor cores and no cross-GPU sync, not FA3.
 
 Rented boxes give direct SSH access, which is simpler than Kaggle in one
 way: no `kaggle_secrets` API, no notebook cells -- just a shell.
@@ -20,8 +24,14 @@ way: no `kaggle_secrets` API, no notebook cells -- just a shell.
 2. Pick a **PyTorch template** when renting (has CUDA + PyTorch preinstalled;
    `run_a10.sh` still reinstalls the exact pinned versions via `uv`, so the
    base image's exact PyTorch version doesn't matter much).
-3. Give it enough disk (dataset shards + checkpoints + deps are a few GB;
-   20-30GB is comfortable) -- **disk size can't be changed after creation**.
+3. Give it enough disk -- **disk size can't be changed after creation**, and
+   16GB was already not enough: `save_checkpoint()` keeps every
+   `--save-every` interval's checkpoint forever (no pruning, ~627MB each
+   for the `a10` config), which filled a 16GB box and corrupted an
+   in-progress write mid-run (see RESEARCH_LOG.md 2026-08-11). **30GB+**
+   minimum recommended; `run_a10.sh` doesn't prune checkpoints itself, so
+   either budget disk for `save_every x checkpoint_size` across the whole
+   run, or pass a larger `--save-every` to reduce how many accumulate.
 4. Click Rent. A fresh (uncached) image pull can take 10-60 minutes; a
    cached one starts in seconds.
 
@@ -65,14 +75,14 @@ chmod +x run_a10.sh
 ```
 
 Rented a 2-GPU box instead of one? `NUM_GPUS=2 ./run_a10.sh` (uses `torchrun`
-instead of plain `python -m`). Recommended for the *first* run on a new GPU
-class regardless: stick with the default single-GPU (`NUM_GPUS=1`) so
-there's one fewer moving part (no DDP sync) while confirming this class of
-hardware is actually faster than Kaggle's T4x2 at all -- no speedup has
-been measured yet, only estimated from hardware specs. Two GPUs generally
-costs close to 2x for a real-world DDP speedup closer to 1.6-1.9x on a
-model this small (gradient-sync overhead is proportionally larger for tiny
-models), so it's about matching wall-clock urgency, not saving money.
+instead of plain `python -m`). Still recommended to start with single-GPU
+(`NUM_GPUS=1`) on any *new* GPU class: one fewer moving part (no DDP sync)
+while confirming this class of hardware is actually faster than Kaggle's
+T4x2 -- now confirmed true for the RTX 5070 Ti (~9.6x, see above), not yet
+tested for other cards. Two GPUs generally costs close to 2x for a
+real-world DDP speedup closer to 1.6-1.9x on a model this small
+(gradient-sync overhead is proportionally larger for tiny models), so it's
+about matching wall-clock urgency, not saving money.
 
 (Or `git clone` the repo and run `vastai/run_a10.sh` directly -- the script
 clones its own working copy separately either way, so either entry point is

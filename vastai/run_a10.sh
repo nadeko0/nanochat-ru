@@ -130,7 +130,7 @@ fi
 $LAUNCH scripts.base_train $SEP \
     --depth=7 --aspect-ratio=48 --window-pattern=L \
     --device-batch-size="$DEVICE_BATCH_SIZE" --target-param-data-ratio=20 \
-    --save-every=100 $RESUME_ARGS --run=dummy --model-tag="$MODEL_TAG"
+    --save-every=300 $RESUME_ARGS --run=dummy --model-tag="$MODEL_TAG"
 
 kill $SYNC_PID 2>/dev/null || true
 python3 kaggle/sync_checkpoints.py --remote gdrive: --once --log-file /tmp/sync.log

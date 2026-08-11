@@ -28,12 +28,11 @@ log — including dead ends and things that didn't work — and
   `no_repeat_ngram_size` to `Engine.generate()` (standard techniques, ported
   not invented — see CHANGELOG). Verified locally: stopped the observed
   looping across every test seed tried so far.
-- **`d4v2` (same architecture, ratio=100, ~1.15B tokens): in progress.**
-  "Overtraining" past the compute-optimal point for better quality, the way
-  real small deployed models (Qwen, Llama) do — see RESEARCH_LOG.md for why.
-- **VRAM probe tool ready** (`kaggle/kaggle_vram_probe.ipynb`) to check
-  whether `d5`/`d6` (71-73M params, next size tier) fit on a T4 before
-  committing hours to a run.
+- **`d6` (73.53M params, ratio=20/Chinchilla-optimal): pretrain done, SFT next.**
+  VRAM-probed first (`kaggle/kaggle_vram_probe.ipynb`) rather than guessing,
+  chosen over overtraining `d4` on more data (the originally-planned `d4v2`)
+  — see RESEARCH_LOG.md for why. 1770 steps / 464.0M tokens, 255.7 min,
+  **min val_bpb 0.9945** — better than `d4`'s 1.0994.
 - **Phase 2 (Russian): deferred** until the English side is judged "done
   enough" within the free-tier compute budget.
 
@@ -45,7 +44,7 @@ continuously to Google Drive so a killed session never loses much progress.
 
 | | upstream nanochat | this fork |
 |---|---|---|
-| Model size | `--depth=20`..`26` (GPT-2 grade, ~560M-1.9B params) | `--depth=4` (~36.7M params), experimenting with `d4` at higher token ratios and possibly `d5`/`d6` |
+| Model size | `--depth=20`..`26` (GPT-2 grade, ~560M-1.9B params) | `--depth=4` (36.70M) and `--depth=6` (73.53M) both trained; see results below |
 | Hardware | 8x H100 node | Kaggle T4 x2 (free tier) |
 | Session length | single long-running job | resumable across many <=12h sessions |
 | Checkpoint storage | local disk | synced continuously to Google Drive via rclone |
@@ -147,26 +146,32 @@ Both computed separately for the English and Russian phases once each
 finishes training. Numbers will be added here (not in a separate leaderboard
 doc, given the small scope of this project) once available.
 
-### English results (d4, 2026-08-10)
+### English results
 
-| stage | metric | value |
+| | `d4` (2026-08-10) | `d6` (2026-08-10/11) |
 |---|---|---|
-| pretrain | depth / params | 4 / 36.70M |
-| pretrain | training tokens | 230,686,720 (880 steps, `--target-param-data-ratio=20`) |
-| pretrain | hardware | Kaggle T4 x2, ~64.1 min wall-clock |
-| pretrain | peak memory | 11.16GiB / 15GiB |
-| pretrain | min validation bpb | 1.0994 (from 3.85 at random init), on ClimbMix val shard |
-| SFT | data | 1 epoch SmolTalk (460,341 rows), 125 steps (dataset exhausted before the 500-step cap) |
-| SFT | hardware | Kaggle T4 x2, 8.3 min wall-clock |
-| SFT | min validation bpb | 0.6616, on held-out SmolTalk/MMLU/GSM8K mixture |
+| depth / params | 4 / 36.70M | 6 / 73.53M |
+| pretrain tokens | 230,686,720 (880 steps, ratio=20) | 463,994,880 (1770 steps, ratio=20) |
+| pretrain hardware | Kaggle T4 x2, 64.1 min | Kaggle T4 x2, 255.7 min |
+| pretrain peak memory | 11.16GiB / 15GiB | 7.96GiB / 15GiB |
+| **pretrain min val_bpb** | 1.0994 (from 3.85 at init) | **0.9945** (from 3.17 at init) |
+| SFT | 1 epoch SmolTalk, 125 steps, 8.3 min | not run yet |
+| SFT min val_bpb | 0.6616 | — |
 
-Chat quality is genuinely mixed, logged honestly in
+Both on the ClimbMix val shard (pretrain) / held-out SmolTalk+MMLU+GSM8K
+mixture (SFT). `d6` beat `d4` on pretrain bpb by doubling model capacity at
+the same Chinchilla-compute-optimal token ratio (20), instead of the
+originally-planned `d4v2` (same `d4` architecture, 5x more data) — see
+[docs/RESEARCH_LOG.md](docs/RESEARCH_LOG.md) for the VRAM-probe-driven
+reasoning behind that choice.
+
+Chat quality on `d4`+SFT is genuinely mixed, logged honestly in
 [docs/RESEARCH_LOG.md](docs/RESEARCH_LOG.md) rather than cherry-picked: some
 prompts get a coherent, on-topic reply, others degenerate into repetition
 loops (fixed since, see CHANGELOG.md for the `repetition_penalty` /
 `no_repeat_ngram_size` addition — not yet re-measured with a formal metric,
-only spot-checked). `d4v2` (more pretraining data) is in progress to see if
-it improves consistency further.
+only spot-checked). `d6` SFT is next, to see if the bigger base model also
+means more consistent chat behavior.
 
 ## License
 

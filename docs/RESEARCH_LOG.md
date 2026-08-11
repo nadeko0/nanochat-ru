@@ -277,10 +277,28 @@ prompt), not a systematic before/after comparison -- see the open item below
 about building an actual repetition-rate metric instead of eyeballing
 transcripts.
 
+## 2026-08-10/11 -- d6 pretrain complete
+
+1770/1770 steps, 464.0M tokens (`--target-param-data-ratio=20`), 255.72 min
+on Kaggle T4x2 (`--device-batch-size=8`), peak memory 7,962.95MiB/15GiB --
+well under the VRAM probe's 11,667MiB reading for this depth, since the
+actual launch used `device_batch_size=8` (forced by the total_batch_size
+divisibility bug above), not the probe's 13. **Min validation bpb: 0.9945**,
+down from `d4`'s 1.0994 -- a real, if modest, improvement from doubling
+model capacity at the same compute-optimal token ratio. Full log:
+`kaggle/runs/2026-08-10_d6_pretrain_ratio20.ipynb`.
+
+The Kaggle session ended on its own (idle timeout after the user fell
+asleep) shortly after training finished -- but only after the run had
+already completed all 1770 steps and the final Drive sync had reported
+`exit code: 0`, so nothing was lost; this was a clean natural finish, not
+an interrupted one.
+
+Next: SFT on this checkpoint (A4).
+
 ## Open questions / next up
 
-- `d6` pretrain (ratio=20, ~4.3h estimated) + SFT results -- decided against
-  `d4v2` (see the VRAM probe entry above for why), not started yet.
+- SFT on `d6` (A4), then compare chat quality against the `d4` SFT run.
 - Build an automated repetition-loop metric (e.g. max repeated n-gram length
   over a fixed prompt set) to replace eyeballing transcripts -- would let
   `d4` vs `d6` be compared objectively instead of anecdotally.

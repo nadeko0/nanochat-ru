@@ -22,7 +22,9 @@ reason.
       the RESEARCH_LOG.md "Fixing the repetition loops" entry). Verified
       locally: stopped the observed looping across every seed tried so far
       (small spot-check, not yet the formal metric in A5).
-- [ ] A3. Run the chosen main pretrain (`d6`) to completion. **In progress.**
+- [x] A3. `d6` pretrain complete: 1770/1770 steps, 255.72 min, min val_bpb
+      0.9945 (vs `d4`'s 1.0994), peak memory 7.96GiB. See
+      kaggle/runs/2026-08-10_d6_pretrain_ratio20.ipynb.
 - [ ] A4. SFT on the resulting checkpoint.
 - [ ] A5. Automated repetition-loop metric (not eyeballing transcripts) —
       compare old `d4` vs the new run objectively, and re-validate the A2.5
@@ -85,5 +87,5 @@ reason.
 
 ---
 
-Progress snapshot: as of 2026-08-10, Phase A: A1/A2/A2.5 done, A3 (`d6`
-pretrain) running; Phases B and C not started (deliberately deferred).
+Progress snapshot: as of 2026-08-10, Phase A: A1/A2/A2.5/A3 done, A4 (SFT)
+next; Phases B and C not started (deliberately deferred).

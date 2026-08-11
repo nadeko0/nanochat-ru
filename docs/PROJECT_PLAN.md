@@ -61,16 +61,27 @@ reason.
       pass. No real signal to learn from at ~0% baseline GSM8K accuracy --
       RL sharpens existing capability, there wasn't any to sharpen. See
       kaggle/runs/2026-08-11_d6_chat_rl.ipynb.
-- [ ] A8. Consolidate: side-by-side comparison of all English variants tried
-      (`d4`, `d6`, and anything from A9/A10) in README + RESEARCH_LOG.md,
-      pick a final English model.
-- [ ] A9. Smaller `--vocab-size` experiment: at `d4`, embeddings are ~46% of
-      total params (32768 vocab). Retrain tokenizer at e.g. 8192-16384 and
-      compare — does reallocating that budget to transformer capacity help
-      at this scale?
-- [ ] A10. Different `--aspect-ratio` (model_dim = depth * aspect_ratio,
-      default 64, tuned by upstream for much bigger models): try narrower/
-      deeper or wider/shallower at a fixed param budget, compare.
+- [x] A8 (interim). `d4` vs `d6` side-by-side comparison table done in
+      README.md's Evaluation section + RESEARCH_LOG.md's dated entries.
+      Will be re-opened to add A9/A10 (and A-opt-1, if run) rows once those
+      finish, and to state a final pick then.
+- [ ] A9. Smaller `--vocab-size` experiment, sized against `d6`'s budget
+      (our current best model, not `d4`): `--vocab-size=16384 --depth=7`
+      (default aspect-ratio) -> `model_dim=512`, **72.35M params** (close
+      to `d6`'s 73.53M), non-embedding fraction 30.4% vs `d6`'s 14.4%.
+      Requires retraining the tokenizer (different vocab_size). Estimated
+      ~7.9h pretrain (calibrated from `d4`/`d6`'s measured FLOPs-to-wallclock
+      rate). Queued for after A10 finishes (shares Kaggle GPU-hours budget).
+- [ ] A10. `--aspect-ratio` experiment, planned and notebook-ready. `--aspect-ratio=48
+      --depth=7` (default vocab_size=32768, reuses the existing tokenizer)
+      -> `model_dim=384` (**same width as `d6`**), 7 layers instead of 6 ->
+      **87.88M params**. Isolates "more depth at fixed width" from the
+      width change that also happened between `d4` and `d6`. Same
+      `--target-param-data-ratio=20` as every other run, for a clean
+      comparison. Estimated ~5.17h pretrain + SFT + quick eval, one
+      session. Notebook ready: `kaggle/kaggle_train_a10.ipynb` (model tag
+      `a10`, not `d7` -- that would collide with a *default*-aspect-ratio
+      depth=7 model, a different architecture). Not run yet.
 
 ### A-optional (stretch, only if there's budget left)
 
@@ -107,5 +118,7 @@ reason.
 
 ---
 
-Progress snapshot: as of 2026-08-11, Phase A: A1-A7 done, A8 (consolidate)
-next, A9/A10 optional; Phases B and C not started (deliberately deferred).
+Progress snapshot: as of 2026-08-11, Phase A: A1-A8(interim) done. A10
+notebook ready (`kaggle/kaggle_train_a10.ipynb`, ~5.17h, one session) --
+running next. A9 queued after (~7.9h, needs a tokenizer retrain, sized
+against `d6`'s budget). Phases B and C not started (deliberately deferred).

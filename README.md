@@ -63,6 +63,15 @@ hardware, understand every layer of it, and repeat it for Russian.
   from at ~0% baseline GSM8K accuracy. RL sharpens existing capability
   rather than creating it; there wasn't any here to sharpen. Full numbers:
   [docs/RESEARCH_LOG.md](docs/RESEARCH_LOG.md).
+- **A9/A10 architecture experiments, next.** Both `d4` and `d6` put
+  85-91% of their params into embeddings (`vocab_size=32768` was tuned
+  upstream for much bigger models) — A9/A10 test reallocating that budget,
+  sized against `d6`. **A10** (`--aspect-ratio=48 --depth=7`, same width as
+  `d6` but 7 layers instead of 6, 87.88M params): notebook ready
+  ([kaggle/kaggle_train_a10.ipynb](kaggle/kaggle_train_a10.ipynb)), ~5.2h,
+  not run yet. **A9** (`--vocab-size=16384 --depth=7`, 72.35M params,
+  needs a tokenizer retrain): queued after, ~7.9h — the two together
+  exceed one 12h Kaggle session, so running as separate nights.
 - **Phase 2 (Russian): deferred** until the English side is judged "done
   enough" within the free-tier compute budget.
 
@@ -124,6 +133,9 @@ than copied cell by cell:
 - [kaggle/kaggle_eval.ipynb](kaggle/kaggle_eval.ipynb) — full `chat_eval.py` (ARC/MMLU/GSM8K/
   HumanEval) + full BLiMP grammar eval, both models. Run.
 - [kaggle/kaggle_rl.ipynb](kaggle/kaggle_rl.ipynb) — bounded `chat_rl.py` (RL on GSM8K). Run for `d6`.
+- [kaggle/kaggle_train_a10.ipynb](kaggle/kaggle_train_a10.ipynb) — A9/A10 architecture
+  experiments (`aspect_ratio`/`vocab_size` reallocation, sized against `d6`'s budget — see
+  [docs/RESEARCH_LOG.md](docs/RESEARCH_LOG.md)). A10 ready to run; A9 queued after.
 
 1. **Local**: edit code, config, or a notebook here; commit to git; push to
    GitHub.

@@ -5,6 +5,23 @@ for the reasoning/dead-ends behind these changes, [docs/PROJECT_PLAN.md](docs/PR
 for the tracked checklist, and [kaggle/runs/](kaggle/runs/) for the full-output notebooks
 behind each result.
 
+## 2026-08-11 (cont'd)
+
+- Added `kaggle/kaggle_train_a10.ipynb`: full pretrain + SFT + quick eval for the A10
+  architecture experiment (`--aspect-ratio=48 --depth=7` -> `model_dim=384`, same width as `d6`
+  but 7 layers instead of 6, 87.88M params, model tag `a10`). Same `--target-param-data-ratio=20`
+  as every other run for a clean comparison. Reuses the existing tokenizer/dataset — no retrain
+  needed (default `vocab_size=32768`).
+- Sized A9/A10 against `d6`'s ~73.53M param budget instead of `d4`'s (`d6` is the current best
+  model, and just as embedding-dominated as `d4` — 85.6% vs 91.4% of params). Recomputed A9 as
+  `--vocab-size=16384 --depth=7` (72.35M params). Estimated pretrain time for both via
+  `model.estimate_flops()` calibrated against `d4`/`d6`'s actual measured wall-clock (not
+  guessed): A9 ~7.9h, A10 ~5.2h. Combined exceeds the 12h Kaggle session cap, so running as two
+  separate notebooks/sessions (A10 first) instead of forcing both into one unattended run.
+- Refreshed all docs (README, CHANGELOG, RESEARCH_LOG, PROJECT_PLAN, kaggle/runs/README) to
+  current state and converted several plain-text "see X.md" mentions into real clickable
+  markdown links.
+
 ## 2026-08-11
 
 - More qualitative `d6` chat samples (5 new English prompts, local CPU): fluent,

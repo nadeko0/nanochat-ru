@@ -507,6 +507,85 @@ absent factual grounding and zero real reasoning -- exactly the
 BLiMP-high/MMLU-low split A6.5 measured formally, now visible in actual
 transcripts rather than just aggregate scores.
 
+## 2026-08-11 -- Sizing A9/A10 against d6's budget, and a time estimate that changed the plan
+
+Originally sized A9 (smaller vocab) and A10 (different aspect ratio) against
+`d4`'s ~36.7M param budget, per the plan's original framing ("at `d4`,
+embeddings are ~46% of total params"). Reconsidered: `d6` is our current
+best model (better bpb, better BLiMP), and its embedding fraction is
+similarly extreme (85.6% of total params are `wte`+`lm_head`+`value_embeds`,
+vs `d4`'s 91.4%) -- so sizing these experiments against `d6`'s ~73.53M
+budget instead is more relevant to picking a final architecture.
+
+Recomputed via the meta-device `num_scaling_params()` method (same approach
+as the original depth search):
+
+- **A9**: `--vocab-size=16384 --depth=7` (default aspect-ratio=64) ->
+  `model_dim=512`, **72.35M params** (close match to `d6`'s 73.53M),
+  non-embedding (`transformer_matrices`) fraction 30.4% vs `d6`'s 14.4%.
+- **A10**: `--aspect-ratio=48 --depth=7` (default vocab_size=32768) ->
+  `model_dim=384` (**same width as `d6`**, since `d6` is
+  `aspect_ratio=64,depth=6`), 7 layers instead of 6 -> **87.88M params**.
+  Isolates "more depth at fixed width" from the width change that also
+  happened between `d4` and `d6` -- a cleaner ablation than "aspect ratio"
+  sounds like, because rounding `model_dim` to multiples of `head_dim=128`
+  collapses many `(depth, aspect_ratio)` pairs onto identical architectures
+  (e.g. `aspect_ratio=48, depth=4` is literally `d4` again -- not every
+  aspect_ratio value produces a genuinely different model at a given depth).
+
+**Time estimate, calibrated not guessed**: used `model.estimate_flops()`
+(the same method `base_train.py` itself calls) plus the *measured*
+FLOPs-to-wall-clock rate from the two real completed runs (`d4`:
+2.177e16 FLOPs / 64.1min, `d6`: 9.086e16 FLOPs / 255.72min -- rates agree
+within 4.4% of each other, giving confidence in linear extrapolation over
+this range) to estimate pretrain time at `--target-param-data-ratio=20`:
+
+- A9: ~608M target tokens, ~1.645e17 FLOPs -> **~7.9h**
+- A10: ~499M target tokens, ~1.078e17 FLOPs -> **~5.2h**
+
+Combined sequentially (as originally requested, one notebook, run
+overnight unattended) that's ~13-14h with SFT/eval on top -- over both the
+requested ~10h and the hard 12h-per-session Kaggle cap. Decided to run them
+as two separate notebooks/nights instead of forcing both into one session
+(the alternative -- dropping the token ratio to ~15 to fit one night --
+was rejected in favor of keeping ratio=20 fixed across every architecture
+variant, so any bpb/BLiMP difference we see is attributable to the
+architecture change, not a confounded data-ratio change too).
+
+A10 first (cheaper, reuses the existing tokenizer, and mechanically
+continues the already-validated `d4`->`d6` direction rather than
+introducing a new variable): `kaggle/kaggle_train_a10.ipynb`, one notebook
+covering pretrain + SFT + a quick chat/repetition check, tag `a10`. A9
+queued for after (separate notebook, not built yet -- needs a tokenizer
+retrain step first).
+
+**Honest expectation for A9/A10**, since it's worth stating up front rather
+than only after the fact: BLiMP/bpb plausibly move (they were sensitive to
+the `d4`->`d6` capacity change); MMLU/GSM8K almost certainly won't (that
+gap is about orders of magnitude of scale per the Qwen comparison, not
+budget allocation); qualitative chat coherence is genuinely uncertain --
+A10 seems the safer bet of the two (same lever that already worked once),
+A9 is more exploratory (smaller vocab means longer tokenized sequences per
+unit of text, a real potential downside that could offset the "more
+compute budget" upside).
+
+### Aside: cloud GPU rental as a faster alternative to free Kaggle T4s
+
+User asked what a paid GPU (e.g. Vast.ai, RunPod) would cost, to get
+results faster than waiting hours on a free T4x2. Looked it up rather than
+guessing: RTX 4090 on Vast.ai's marketplace runs roughly **$0.13-0.59/hr**,
+so $5 buys somewhere in the range of 8-38 hours depending on which
+listing. A single 4090 (Ampere/Ada) supports bf16 and Flash Attention 2 --
+both unavailable on Kaggle's T4 (SM75, pre-Ampere), which is why nanochat
+falls back to fp32 + PyTorch SDPA there. Real speedup over T4x2 for this
+workload isn't measured, just plausible (bf16 alone is commonly ~2x on
+tensor cores, plus materially higher raw FLOPS than a T4). Not pursued yet
+-- would need adapting the `kaggle_*.ipynb` notebooks' Kaggle-specific bits
+(the `kaggle_secrets` API, session-based GPU allocation) to a generic
+SSH/Jupyter cloud box, and is a real-money commitment the user would need
+to set up and fund directly, not something to build unprompted.
+Source: [Vast.ai RTX 4090 pricing](https://vast.ai/pricing/gpu/RTX-4090).
+
 ## Open questions / next up
 - Consider a tied-embeddings experiment (`wte`==`lm_head`): at `d4`,
   embeddings are ~46% of total params (untied by upstream design, see

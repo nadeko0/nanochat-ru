@@ -327,6 +327,52 @@ from `d6` so far is the bpb numbers (0.9945 vs 1.0994 pretrain, 0.6169 vs
 gap between "the loss numbers improved" and "the chat still isn't reliably
 good" is itself worth remembering honestly, not smoothing over.
 
+## 2026-08-11 -- A5: objective repetition-loop metric
+
+Replaced eyeballing chat_cli transcripts with `scripts/eval_repetition.py`:
+generates completions for 10 fixed varied prompts x 3 seeds (30 generations
+per config), reports:
+- **distinct-1 / distinct-2**: fraction of unique unigrams/bigrams among all
+  generated tokens ([Li et al. 2016](https://arxiv.org/abs/1510.03055), a
+  standard NLG diversity metric, not invented here). Lower = more repetitive.
+- **max-4gram-repeat**: the most times any single 4-token sequence repeats
+  within one generation -- a direct "did it get stuck" signal, since
+  distinct-n can look acceptable on average while still missing one bad loop.
+- **loop count**: generations where a 4-gram repeated >=3 times (an
+  arbitrary but reasonable "this is clearly stuck" threshold).
+
+Run locally on CPU against both SFT checkpoints, with and without the A2.5
+fix (`--repetition-penalty=1.0 --no-repeat-ngram-size=0` = off,
+`=1.2/=3` = on, matching the `chat_cli.py` defaults):
+
+| model | repetition control | distinct-1 | distinct-2 | worst max-4gram-repeat | loops (of 30) |
+|---|---|---|---|---|---|
+| `d4` | off | 0.4380 | 0.6424 | 93 | 18 |
+| `d4` | on | 0.7917 | 0.9848 | 1 | 0 |
+| `d6` | off | 0.5254 | 0.7889 | 89 | 8 |
+| `d6` | on | 0.8039 | 0.9864 | 1 | 0 |
+
+Three things confirmed with real numbers instead of a handful of spot-checked
+seeds:
+
+1. **The A2.5 fix is not a marginal improvement -- it's the difference
+   between 60% of generations looping (`d4` off: 18/30) and 0%.** This is a
+   much larger, more decisive effect than the earlier 4-seed spot-check
+   suggested.
+2. **`d6` is more loop-resistant than `d4` even without the fix** (8/30 vs
+   18/30, higher distinct-1/2) -- some support for the "bigger model helps
+   with degenerate repetition" intuition from earlier, though it clearly
+   doesn't solve it alone (8/30 is still bad).
+3. **With the fix on, `d4` and `d6` are nearly indistinguishable on this
+   metric** (0.7917/0.9848 vs 0.8039/0.9864, both 0/30 loops) -- for this
+   specific failure mode, the decoding-time fix matters far more than the
+   2x jump in model capacity did. Doesn't mean `d6` isn't better overall
+   (its bpb numbers are better, and this metric says nothing about whether
+   the *content* of a loop-free response is any good), just that
+   loop-avoidance specifically was never really a capacity problem to begin
+   with -- consistent with the original diagnosis that this was a decoding
+   issue, not a training one.
+
 ## Open questions / next up
 
 - Build an automated repetition-loop metric (e.g. max repeated n-gram length

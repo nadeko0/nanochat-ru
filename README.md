@@ -24,10 +24,15 @@ log — including dead ends and things that didn't work — and
   epoch, min val_bpb 0.6616. Chat quality is real but inconsistent — coherent
   on many prompts, degenerates into repetition loops on others. Checkpoint +
   full-output run notebooks: [kaggle/runs/](kaggle/runs/).
-- **Repetition-loop fix**: added `repetition_penalty` +
+- **Repetition-loop fix, objectively measured**: added `repetition_penalty` +
   `no_repeat_ngram_size` to `Engine.generate()` (standard techniques, ported
-  not invented — see CHANGELOG). Verified locally: stopped the observed
-  looping across every test seed tried so far.
+  not invented — see CHANGELOG). `scripts/eval_repetition.py`
+  (distinct-1/2 + max-4gram-repeat over 10 prompts x 3 seeds, [Li et al.
+  2016](https://arxiv.org/abs/1510.03055)) confirms it: **18/30 (`d4`) and
+  8/30 (`d6`) generations looped without it, 0/30 for both with it.** With
+  the fix on, `d4` and `d6` are nearly indistinguishable on this metric —
+  loop-avoidance turned out to be a decoding fix, not something model size
+  fixes on its own. Full numbers: RESEARCH_LOG.md.
 - **`d6` (73.53M params, ratio=20/Chinchilla-optimal): pretrain + SFT done.**
   VRAM-probed first (`kaggle/kaggle_vram_probe.ipynb`) rather than guessing,
   chosen over overtraining `d4` on more data (the originally-planned `d4v2`)

@@ -29,9 +29,12 @@ reason.
       (vs `d4`'s 0.6616). Chat test (2 prompts, with the repetition-penalty
       fix active): both coherent, no loops. See
       kaggle/runs/2026-08-11_d6_sft.ipynb.
-- [ ] A5. Automated repetition-loop metric (not eyeballing transcripts) —
-      compare old `d4` vs the new run objectively, and re-validate the A2.5
-      fix with real numbers instead of a 4-seed spot-check.
+- [x] A5. `scripts/eval_repetition.py` (distinct-1/distinct-2 + max-4gram-repeat,
+      10 prompts x 3 seeds): confirmed A2.5's fix objectively -- loops
+      18/30 (`d4`) and 8/30 (`d6`) without it, 0/30 for both with it. `d6`
+      is somewhat more loop-resistant than `d4` even unfixed, but with the
+      fix on the two are nearly indistinguishable on this metric. See
+      RESEARCH_LOG.md 2026-08-11 entry.
 - [ ] A6. `chat_eval.py` — formal ARC/MMLU/GSM8K/HumanEval numbers, for
       completeness (expected to be near-baseline at this scale, run anyway).
 - [ ] A6.5. BLiMP-style grammar eval ([Warstadt et al. 2020](https://arxiv.org/abs/1912.00582)):
@@ -90,5 +93,5 @@ reason.
 
 ---
 
-Progress snapshot: as of 2026-08-11, Phase A: A1-A4 done, A5 (repetition
-metric) next; Phases B and C not started (deliberately deferred).
+Progress snapshot: as of 2026-08-11, Phase A: A1-A5 done, A6 (chat_eval) /
+A6.5 (BLiMP) next; Phases B and C not started (deliberately deferred).

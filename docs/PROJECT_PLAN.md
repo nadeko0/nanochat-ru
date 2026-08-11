@@ -118,7 +118,10 @@ reason.
 
 ---
 
-Progress snapshot: as of 2026-08-11, Phase A: A1-A8(interim) done. A10
-notebook ready (`kaggle/kaggle_train_a10.ipynb`, ~5.17h, one session) --
-running next. A9 queued after (~7.9h, needs a tokenizer retrain, sized
-against `d6`'s budget). Phases B and C not started (deliberately deferred).
+Progress snapshot: as of 2026-08-11, Phase A: A1-A8(interim) done. Testing
+A10 on a rented single-GPU box (Vast.ai, `$5` funded, `vastai/run_a10.sh` +
+`docs/VASTAI_SETUP.md`) instead of Kaggle T4x2, hoping for a real speedup
+(unverified, ~3-6x guess from hardware specs) -- `kaggle/kaggle_train_a10.ipynb`
+stays as the Kaggle fallback if the rented box doesn't pan out. A9 queued
+after (~7.9h on T4x2, needs a tokenizer retrain, sized against `d6`'s
+budget). Phases B and C not started (deliberately deferred).

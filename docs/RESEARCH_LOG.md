@@ -586,6 +586,39 @@ SSH/Jupyter cloud box, and is a real-money commitment the user would need
 to set up and fund directly, not something to build unprompted.
 Source: [Vast.ai RTX 4090 pricing](https://vast.ai/pricing/gpu/RTX-4090).
 
+## 2026-08-11 -- Funded Vast.ai, built the single-GPU adaptation for A10
+
+User added $5 credit to a Vast.ai account and shared a live marketplace
+listing dump to pick from. Key filter applied: this project's models are
+tens of millions of params, so the 48GB/96GB/179GB listings (RTX PRO 6000,
+H100, H200, B200) are wasted money -- a cheap single 12-24GB Ampere/Ada
+card (RTX 4070 Ti/5070/3090, ~$0.09-0.16/hr per the listings shared) is the
+right fit. $5 buys 30-50+ hours at that rate.
+
+Looked up [docs.vast.ai](https://docs.vast.ai/documentation/get-started/quickstart)
+rather than guessing the rental/SSH flow -- summarized into
+`docs/VASTAI_SETUP.md`. SSH access is actually simpler than Kaggle for
+this: no `kaggle_secrets` API, no notebook cells, just a shell with `tmux`
+by default (survives SSH disconnects).
+
+Wrote `vastai/run_a10.sh`: single-GPU version of `kaggle_train_a10.ipynb`'s
+pipeline (clone+deps, rclone from plain env vars instead of Kaggle
+Secrets, VRAM probe to pick a safe `--device-batch-size` for whichever GPU
+actually gets rented, pretrain, SFT, quick eval). No `torchrun` (single
+GPU, no DDP) -- caught the same `--`-separator mistake from the `chat_rl.py`
+bug before it shipped this time (plain `python -m` doesn't use torchrun's
+`--` convention). One real difference from the Kaggle notebooks: with
+`world_size=1` instead of 2, `device_batch_size` must divide
+`262144/2048=128` (not 64) for the auto-computed `total_batch_size` to
+divide evenly.
+
+**Honest time expectation, stated before running rather than after**: 3-6x
+speedup over the T4x2 Kaggle numbers is a reasoned guess from the hardware
+specs (bf16, no cross-GPU sync, more raw FLOPS), not a measurement. Applied
+to the combined A9+A10 estimate (~13.1h), that's a 2.2-4.4h range -- the
+user's hoped-for "~3 hours to close both" sits inside that range but on
+the optimistic side, not a promise.
+
 ## Open questions / next up
 - Consider a tied-embeddings experiment (`wte`==`lm_head`): at `d4`,
   embeddings are ~46% of total params (untied by upstream design, see

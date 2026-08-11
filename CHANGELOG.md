@@ -5,6 +5,16 @@ for the reasoning/dead-ends behind these changes, [docs/PROJECT_PLAN.md](docs/PR
 for the tracked checklist, and [kaggle/runs/](kaggle/runs/) for the full-output notebooks
 behind each result.
 
+## 2026-08-11 (cont'd, 2)
+
+- Added `vastai/run_a10.sh` + `docs/VASTAI_SETUP.md`: single-command A10 pipeline
+  (clone+deps, rclone from plain env vars instead of Kaggle Secrets, VRAM probe, pretrain,
+  SFT, quick eval) for a rented GPU (Vast.ai) instead of Kaggle T4x2 — testing whether
+  Ampere/Ada hardware (bf16 + Flash Attention, both unavailable on Kaggle's T4) gives a
+  real speedup. Not measured yet, only estimated (~3-6x guess from hardware specs).
+  Supports `NUM_GPUS=2` (switches to `torchrun`) for a dual-GPU box, defaulting to 1 for
+  the first run to keep the untested hardware class simple to debug.
+
 ## 2026-08-11 (cont'd)
 
 - Added `kaggle/kaggle_train_a10.ipynb`: full pretrain + SFT + quick eval for the A10

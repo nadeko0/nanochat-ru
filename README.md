@@ -136,6 +136,10 @@ than copied cell by cell:
 - [kaggle/kaggle_train_a10.ipynb](kaggle/kaggle_train_a10.ipynb) — A9/A10 architecture
   experiments (`aspect_ratio`/`vocab_size` reallocation, sized against `d6`'s budget — see
   [docs/RESEARCH_LOG.md](docs/RESEARCH_LOG.md)). A10 ready to run; A9 queued after.
+- [vastai/run_a10.sh](vastai/run_a10.sh) + [docs/VASTAI_SETUP.md](docs/VASTAI_SETUP.md) —
+  same A10 pipeline, adapted for a rented single/dual-GPU box (Vast.ai) instead of Kaggle,
+  to test whether Ampere/Ada hardware (bf16, Flash Attention — unavailable on Kaggle's T4)
+  is meaningfully faster. Speedup not measured yet, only estimated.
 
 1. **Local**: edit code, config, or a notebook here; commit to git; push to
    GitHub.

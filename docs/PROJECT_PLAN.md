@@ -35,16 +35,24 @@ reason.
       is somewhat more loop-resistant than `d4` even unfixed, but with the
       fix on the two are nearly indistinguishable on this metric. See
       RESEARCH_LOG.md 2026-08-11 entry.
-- [ ] A6. `chat_eval.py` — formal ARC/MMLU/GSM8K/HumanEval numbers, for
+- [~] A6. `chat_eval.py` — formal ARC/MMLU/GSM8K/HumanEval numbers, for
       completeness (expected to be near-baseline at this scale, run anyway).
-- [ ] A6.5. BLiMP-style grammar eval ([Warstadt et al. 2020](https://arxiv.org/abs/1912.00582)):
+      Local CPU sample (`d6`, n=100 each, categorical tasks only): ARC-Easy
+      22%, ARC-Challenge 27%, MMLU 32% -- all near the 25% chance baseline,
+      as expected. Full unsampled run (all tasks incl. GSM8K/HumanEval, both
+      `d4` and `d6`) queued in `kaggle/kaggle_eval.ipynb`, not run yet.
+- [~] A6.5. BLiMP-style grammar eval ([Warstadt et al. 2020](https://arxiv.org/abs/1912.00582)):
       67 categories of minimal-pair sentences (one grammatical, one with a
       single grammatical violation -- agreement, tense, negation, etc.),
       score by which sentence the model assigns higher probability to. No
       fine-tuning needed (reuses the existing bpb-style forward pass, low
       effort) -- and unlike MMLU/GSM8K, actually tests something this model's
       scale can plausibly do well on (grammar), not just knowledge/reasoning
-      it can't.
+      it can't. `scripts/eval_blimp.py` written (batched, verified locally).
+      Local CPU spot-check (`d6`, 2 categories x 30 pairs): adjunct_island
+      73.3%, passive_1 73.3% -- well above the 50% chance level, unlike the
+      MMLU/ARC numbers above. Full 67-category x 1000-pair run for both
+      models queued in `kaggle/kaggle_eval.ipynb`, not run yet.
 - [ ] A7. `chat_rl.py` — RL pass, low expectation, log the actual result
       either way.
 - [ ] A8. Consolidate: side-by-side comparison of all English variants tried
@@ -93,5 +101,7 @@ reason.
 
 ---
 
-Progress snapshot: as of 2026-08-11, Phase A: A1-A5 done, A6 (chat_eval) /
-A6.5 (BLiMP) next; Phases B and C not started (deliberately deferred).
+Progress snapshot: as of 2026-08-11, Phase A: A1-A5 done, A6/A6.5 scripts
+written and locally spot-checked, full Kaggle GPU runs
+(`kaggle/kaggle_eval.ipynb`) queued but not run yet; Phases B and C not
+started (deliberately deferred).

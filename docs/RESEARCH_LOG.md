@@ -373,11 +373,43 @@ seeds:
    with -- consistent with the original diagnosis that this was a decoding
    issue, not a training one.
 
+## 2026-08-11 -- A6/A6.5: chat_eval + BLiMP, scripted and spot-checked
+
+`scripts/chat_eval.py` is vendored upstream, unmodified -- ran directly.
+Local CPU sample against `d6`, categorical tasks only, n=100 each
+(`--max-problems 100`, no GSM8K/HumanEval yet since those are generative
+and slow on CPU):
+
+| task | accuracy | chance baseline |
+|---|---|---|
+| ARC-Easy | 22% | 25% |
+| ARC-Challenge | 27% | 25% |
+| MMLU | 32% | 25% |
+
+All within noise of random guessing on a 100-sample size, as expected going
+in -- this model has no realistic capacity for multi-choice
+knowledge/reasoning tasks. Confirms rather than contradicts the plan's
+stated expectation.
+
+Wrote `scripts/eval_blimp.py` (BLiMP, see the A6.5 plan entry for the
+method) with batched scoring (pads a batch of sentences, one forward pass,
+masks out padding when summing log-probs) rather than one sentence at a
+time, needed to make a full 67 x 1000-pair run (134,000 sentences per
+model) tractable. Verified batched output is bit-identical to the
+unbatched version on a small sample first. Local CPU spot-check (`d6`, 2
+categories x 30 pairs, batch-size 16): adjunct_island 73.3%, passive_1
+73.3% -- both well above the 50% chance level, unlike the MMLU/ARC numbers
+above. Consistent with the original hypothesis: this model can plausibly
+show real grammatical competence even though it can't do knowledge/reasoning.
+
+Full unsampled runs (all 5 chat_eval tasks incl. GSM8K/HumanEval, and all
+67 BLiMP categories x 1000 pairs, for both `d4` and `d6`) need GPU to
+finish in reasonable time -- queued in `kaggle/kaggle_eval.ipynb`,
+estimated ~3-4h total for both models across both evals, not run yet.
+
 ## Open questions / next up
 
-- Build an automated repetition-loop metric (e.g. max repeated n-gram length
-  over a fixed prompt set) to replace eyeballing transcripts -- would let
-  `d4` vs `d6` be compared objectively instead of anecdotally.
+- Run `kaggle/kaggle_eval.ipynb` (A6/A6.5 full results).
 - Consider a tied-embeddings experiment (`wte`==`lm_head`): at `d4`,
   embeddings are ~46% of total params (untied by upstream design, see
   `nanochat/gpt.py` docstring "untied weights for token embedding and lm_head").

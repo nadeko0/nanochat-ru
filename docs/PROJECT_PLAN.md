@@ -105,19 +105,46 @@ reason.
       corner of the design space. Not a time/cost blocker (would've been
       cheap on the same rented GPU), just not judged worth doing.
 
-## Phase B — Russian
-
-- [ ] B1. Pick a Russian pretraining corpus (candidates already scouted:
-      `HuggingFaceFW/fineweb-2` ru subset, `uonlp/CulturaX` ru, filtered CC).
-- [ ] B2. Size the corpus (Chinchilla-style, against whatever architecture
-      A8 lands on).
+- [ ] B0. Vocab_size sweep for Russian (16384 vs 32768, A9's architecture
+      shape) -- Cyrillic/morphologically-rich languages are a documented
+      source of poor tokenizer fertility, so A9's English vocab_size
+      finding isn't assumed to transfer. Decide via bpb/RuBLiMP, not by
+      reusing A9's config on faith. See RESEARCH_LOG.md 2026-08-11.
+- [ ] B1. Pick a Russian pretraining corpus. Researched, leaning
+      **`HuggingFaceFW/fineweb-2` config `rus_Cyrl`** (hundreds of billions
+      of tokens, well-documented/actively-maintained pipeline, no Russian
+      equivalent of ClimbMix found to justify deviating) -- not locked in.
+      `CulturaX` ru / HPLT are the fallback candidates. Data volume is a
+      total non-issue at this project's token scale either way. See
+      RESEARCH_LOG.md.
+- [ ] B2. Size the corpus (Chinchilla-style, against A9's architecture
+      shape unless B0 picks a different vocab_size).
 - [ ] B3. Retrain the tokenizer from scratch on the Russian corpus.
+      `nanochat/tokenizer.py`'s `SPLIT_PATTERN` needs **no code changes**
+      -- confirmed it's already Unicode-property-based (`\p{L}`/`\p{N}`),
+      not Latin-only. `nanochat/dataset.py`'s loader is hardcoded to
+      ClimbMix's URL/shard scheme, though -- swapping corpora needs a real
+      code change (4th deviation from vendored code).
 - [ ] B4. Pretrain on Russian.
-- [ ] B5. Find a Russian SFT/conversational dataset (needs research — no
-      candidate picked yet; e.g. Saiga/rulm-family datasets, ru instruction
-      sets, OASST ru subset are directions to check, not commitments).
+- [ ] B5. Russian SFT dataset: researched, leaning **`IlyaGusev/saiga_scored`**
+      (41,609 rows, filter to `language=="ru"` + high `opus_score`,
+      actively maintained, used by 130+ models) as the closest analog to
+      SmolTalk's role. `d0rj/ru-instruct` or Vikhr's ruFLAN (~500K) as
+      fallbacks if that's too small after filtering -- though dataset size
+      was never actually the bottleneck for SFT on this project (SmolTalk's
+      460K rows still only produced 32-125 packed steps). See RESEARCH_LOG.md.
 - [ ] B6. SFT on Russian.
-- [ ] B7. Repeat A5-A7 (repetition metric, chat_eval, chat_rl) for Russian.
+- [ ] B7. Russian eval stack: val_bpb, **RuBLiMP** (`RussianNLP/rublimp`,
+      a real structural equivalent to BLiMP -- 45 phenomena, ~45K pairs,
+      needs a new loader in a `eval_rublimp.py`-style script, not a
+      rewrite of the log-prob-comparison method) + `eval_repetition.py`
+      (already language-agnostic, no changes needed). **Deliberately
+      skipping chat_eval.py-equivalent tasks (no Russian MMLU/GSM8K
+      chase)** -- English chat_eval floored at 0% regardless of
+      architecture across all four models, a Russian version would almost
+      certainly show the same scale-not-language floor, not worth the
+      eval time. `chat_rl.py` also skipped for the same reason A7 found
+      nothing to sharpen at ~0% baseline.
 - [ ] B8. Local chat test in Russian (also: fix the Windows console
       UTF-8/cp1252 crash seen earlier — that was a terminal encoding issue,
       not a model bug).
@@ -142,6 +169,8 @@ measured speedup, ~4h total instance rental across both, well under $1).
 **A9 is the standout**: clean sweep across pretrain bpb (0.956752), SFT
 bpb (0.612585), CORE (0.0949), BLiMP (73.48%), and repetition metric --
 best of all four English models on every axis measured. A10 won on
-pretrain bpb/BLiMP but not SFT bpb, a more mixed result. Phases B
-(Russian) and C (close-out) not started (deliberately deferred) -- these
-are what's actually left on this project.
+pretrain bpb/BLiMP but not SFT bpb, a more mixed result. **Phase B
+researched** (corpus/tokenizer/SFT-data/eval candidates picked, see
+RESEARCH_LOG.md 2026-08-11 "Phase B planning research") but not started --
+next real step is renting a GPU and building the notebooks. Phase C not
+started (deliberately deferred).

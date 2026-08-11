@@ -882,6 +882,106 @@ ratio because "$1 for two full architecture experiments" undersells how much of 
 spent on infra shakedown rather than productive compute, and a repeat run on this now-debugged
 pipeline should take meaningfully less wall-clock.
 
+## 2026-08-11 -- Phase B planning research (corpus, tokenizer, SFT data, eval)
+
+Researched before renting anything, so the next Vast.ai session can go straight to building
+instead of researching mid-session. Web search + HF dataset-card fetches, not guessed.
+
+### Pretraining corpus
+
+Checked the three candidates already scouted (`docs/RESEARCH_LOG.md`/README's Phase 2 section):
+**FineWeb-2** (`HuggingFaceFW/fineweb-2`, config `rus_Cyrl`), **CulturaX** (`ru`), **HPLT**.
+Russian has "hundreds of billions of tokens" in FineWeb-2 alone -- data volume is a total
+non-issue at this project's scale (we used ~500M-600M tokens per English run out of a
+400-billion-token English corpus, i.e. a rounding error of what's available). No Russian
+equivalent of ClimbMix (the clustering-based mixture that beat FineWeb-Edu for *English* on
+this exact pipeline, see the 2026-08-10 entry) was found -- no comparison study exists for
+Russian specifically, so there's no evidence-based reason to deviate from the same
+well-documented, actively-maintained default this project already trusted for English
+(FineWeb's pipeline, same team). **Leaning FineWeb-2 `rus_Cyrl`** unless something better turns
+up, not a locked decision. Structure: `data/rus_Cyrl/{train,test}/*.parquet`, loadable via
+`load_dataset("HuggingFaceFW/fineweb-2", "rus_Cyrl")` or direct parquet paths -- similar shape
+to `nanochat/dataset.py`'s current hardcoded ClimbMix loader, so swapping it will need actual
+code changes (a 4th deviation from vendored code, after `engine.py`/`chat_rl.py`/`common.py`),
+not just a config flag.
+Sources: [FineWeb-2 dataset](https://huggingface.co/datasets/HuggingFaceFW/fineweb-2),
+[FineWeb2: One Pipeline to Scale Them All](https://www.researchgate.net/publication/393065691_FineWeb2_One_Pipeline_to_Scale_Them_All_--_Adapting_Pre-Training_Data_Processing_to_Every_Language).
+
+### Tokenizer -- good news: no code changes needed, but vocab_size is a real open question
+
+Checked `nanochat/tokenizer.py`'s `SPLIT_PATTERN` (`nanochat/tokenizer.py:26`): it's built on
+Unicode property classes (`\p{L}`, `\p{N}`), not literal Latin character ranges, so it already
+handles Cyrillic letter-runs correctly with zero code changes -- the only English-specific bit
+(`'(?i:[sdmt]|ll|ve|re)`, contraction handling) simply won't match Russian text and falls
+through to the general rule harmlessly. Confirmed against a live `karpathy/nanochat` GitHub
+issue (#107, "multilingual tokenization support") raising exactly this as an open question for
+the upstream project -- our vendored copy already clears it structurally.
+
+**What isn't already settled**: `vocab_size`. Cyrillic/morphologically-rich languages are a
+documented source of poor tokenizer fertility (more distinct wordforms per lemma than English
+due to case/gender/number inflection) -- multiple papers on Ukrainian/Kazakh tokenization found
+this pushes toward wanting a *larger* vocab for good compression, the opposite direction from
+A9's finding that a *smaller* vocab (16384 vs 32768) won on English at this model scale. Since
+that tokenizer is trained on the target corpus from scratch either way (not reusing a
+multilingual pretrained one, so the "multilingual tokenizer wastes budget on other languages"
+failure mode doesn't directly apply to us), the fertility question is really "how well does a
+16384 or 32768 Russian-only BPE vocab compress Russian specifically" -- an empirical question,
+not something to assume transfers from the English A9 result. **Recommendation: don't just
+reuse A9's vocab_size=16384 on faith -- run a small vocab_size sweep (e.g. 16384 vs 32768) on
+the Russian corpus, same architecture, and let val_bpb/RuBLiMP decide**, same spirit as A9 vs
+A10 for English.
+Sources: [SozKZ: Efficient Small LMs for Kazakh](https://arxiv.org/pdf/2603.20854),
+[The Tokenizer Tax Across 25 European Languages](https://arxiv.org/pdf/2605.24718),
+[nanochat issue #107](https://github.com/karpathy/nanochat/issues/107).
+
+### SFT data
+
+Upstream nanochat uses SmolTalk (English) for SFT here. Russian equivalents found, ranked by
+fit: **`IlyaGusev/saiga_scored`** (41,609 rows, multilingual but includes Russian, needs
+filtering to `language=="ru"`, scored 1-10 by quality -- can filter to high-scoring rows only,
+actively maintained, used to train 130+ models per its HF card) is the closest match to
+SmolTalk's role (general-purpose instruction/chat mixture, not a single narrow task). Bigger
+but less curated alternatives if 41.6K filtered-to-Russian rows turns out too small:
+**`d0rj/ru-instruct`** (combined from several sources, deduplicated) or Vikhr's **ruFLAN**
+(~500K, per their paper). Worth remembering: **dataset size was never actually a bottleneck for
+SFT on this project** -- SmolTalk's 460K rows still only produced 32-125 *packed* training
+steps for our tiny models (bestfit-packing exhausts the mixture almost immediately at this
+scale), so even the smallest of these Russian options is very unlikely to be the limiting
+factor. Sources: [rulm](https://github.com/IlyaGusev/rulm),
+[saiga_scored](https://huggingface.co/datasets/IlyaGusev/saiga_scored),
+[Vikhr paper](https://arxiv.org/html/2405.13929v5).
+
+### Eval -- BLiMP has a real Russian equivalent
+
+**RuBLiMP** (`RussianNLP/rublimp`, [Taktasheva et al. 2024](https://aclanthology.org/2024.emnlp-main.522/))
+exists and is structurally close to BLiMP: 45 linguistic phenomena, ~1000 pairs each (~45K
+total), built the same way (grammatical vs. perturbed-ungrammatical sentence pairs) but via
+UD-parser-driven perturbation rather than hand-written templates. Column names differ from
+BLiMP (`source_sentence`/`target_sentence`, not `sentence_good`/`sentence_bad`) and which one is
+grammatical needs verifying against the paper before assuming a direction -- but the same
+batched log-prob-comparison method `scripts/eval_blimp.py` already uses should port over with a
+new loader function, not a rewrite. MMLU/GSM8K/HumanEval have no meaningful Russian equivalent
+worth chasing: this project's own English results already showed those tasks floor at 0%
+regardless of architecture at this scale (A9 vs A10 vs `d4` vs `d6`, all four), so a Russian
+version would almost certainly show the same floor for the same reason (scale, not language) --
+not worth the eval time. **Planned Russian eval stack: val_bpb, RuBLiMP, `eval_repetition.py`
+(already language-agnostic, no changes needed), qualitative chat test.** Skipping chat_eval.py
+entirely for Russian unless there's a specific reason to revisit that later.
+
+### Recommendation on structure (single notebook vs. ladder)
+
+User's question: repeat the `d4`->`d6` ladder (ratchet up one variable at a time, build a
+comparison table) or go straight to an A9-style single combined pipeline. Leaning toward a
+**middle path**: architecture search is already answered for this scale (A9's vocab-reallocated
+`depth=7` shape won cleanly for English, no strong reason to expect the opposite for Russian) --
+re-running the full `d4`/`d6`/`a10`/`a9` ladder for Russian would mostly just re-derive an
+already-known result at real GPU-rental cost. The one genuinely open question is the
+Russian-specific `vocab_size` sweep above, which *is* worth a small ladder (2 vocab sizes,
+same architecture) rather than assuming. So: **small vocab_size ladder (16384 vs 32768) at
+A9's architecture shape, pick the winner via bpb/RuBLiMP, then one full pretrain+SFT+eval
+pipeline on the winner** -- cheaper and more informative than either extreme (blind reuse of
+A9's exact config, or re-running the entire English ladder from scratch).
+
 ## Open questions / next up
 - Consider a tied-embeddings experiment (`wte`==`lm_head`, A-opt-1): untied
   by upstream design (see `nanochat/gpt.py` docstring). Given A9's clean

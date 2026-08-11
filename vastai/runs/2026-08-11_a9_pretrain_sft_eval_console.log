@@ -1,0 +1,166 @@
+=== A9 pretrain (vastai_train_a9.ipynb Cell 5) ===
+depth=7 model_dim=512 n_head=4
+GPU: NVIDIA GeForce RTX 5070 Ti | Peak FLOPS (BF16): 8.79e+13
+COMPUTE_DTYPE: torch.bfloat16
+WARNING: Flash Attention 3 not available, using PyTorch SDPA fallback
+Vocab size: 16,384
+Model config: {"sequence_len": 2048, "vocab_size": 16384, "n_layer": 7, "n_head": 4, "n_kv_head": 4, "n_embd": 512, "window_pattern": "L"}
+Parameter counts:
+wte                     : 8,388,608
+value_embeds            : 33,554,432
+lm_head                 : 8,388,608
+transformer_matrices    : 22,020,288
+scalars                 : 40
+total                   : 72,351,976
+Auto-computed optimal batch size: 262,144 tokens
+Calculated number of iterations from target data:param ratio: 2,320
+Total number of training tokens: 608,174,080
+Tokens : Scaling params ratio: 20.00
+[... 2320 training steps, bf16_mfu averaging ~82% ...]
+[2026-08-11 19:54:55] pruned step 2000 (3 files, age 425s)
+Step 02320 | Validation bpb: 0.956752
+
+Evaluating: hellaswag_zeroshot (0-shot)... accuracy: 0.2900 | centered: 0.0533
+Evaluating: jeopardy (10-shot)... accuracy: 0.0000 | centered: 0.0000
+Evaluating: bigbench_qa_wikidata (10-shot)... accuracy: 0.1140 | centered: 0.1140
+Evaluating: arc_easy (10-shot)... accuracy: 0.4060 | centered: 0.2080
+Evaluating: arc_challenge (10-shot)... accuracy: 0.2440 | centered: -0.0080
+Evaluating: copa (0-shot)... accuracy: 0.5000 | centered: 0.0000
+Evaluating: commonsense_qa (10-shot)... accuracy: 0.3460 | centered: 0.1825
+Evaluating: piqa (10-shot)... accuracy: 0.6420 | centered: 0.2840
+Evaluating: openbook_qa (0-shot)... accuracy: 0.2820 | centered: 0.0427
+Evaluating: lambada_openai (0-shot)... accuracy: 0.2380 | centered: 0.2380
+Evaluating: hellaswag (10-shot)... accuracy: 0.2860 | centered: 0.0480
+Evaluating: winograd (0-shot)... accuracy: 0.5495 | centered: 0.0989
+Evaluating: winogrande (0-shot)... accuracy: 0.5160 | centered: 0.0320
+Evaluating: bigbench_dyck_languages (10-shot)... accuracy: 0.0620 | centered: 0.0620
+Evaluating: agi_eval_lsat_ar (3-shot)... accuracy: 0.2478 | centered: 0.0598
+Evaluating: bigbench_cs_algorithms (10-shot)... accuracy: 0.4360 | centered: 0.4360
+Evaluating: bigbench_operators (10-shot)... accuracy: 0.1286 | centered: 0.1286
+Evaluating: bigbench_repeat_copy_logic (10-shot)... accuracy: 0.0000 | centered: 0.0000
+Evaluating: squad (10-shot)... accuracy: 0.1480 | centered: 0.1480
+Evaluating: coqa (0-shot)... accuracy: 0.1480 | centered: 0.1480
+Evaluating: boolq (10-shot)... accuracy: 0.4720 | centered: -0.3895
+Evaluating: bigbench_language_identification (10-shot)... accuracy: 0.2740 | centered: 0.2013
+Step 02320 | CORE metric: 0.0949
+
+<|bos|>The capital of France is the French capital, which is located in the northwest corner of the country.
+<|bos|>The chemical symbol of gold is gold. It has a number of different meanings, including the following: Gold is
+<|bos|>If yesterday was Friday, then tomorrow will be the day of the week. The weather is very sunny and warm. It's
+<|bos|>The opposite of hot is the fact that it's a very hot air balloon. It's not as cold
+<|bos|>The planets of the solar system are: 1. The sun is a very hot planet, and it's not only
+<|bos|>My favorite color is blue. I love the colors of my favorite shades, but they are not as
+<|bos|>If 5*x + 3 = 13, then x is the number of points in the equation. If we have a point (0)
+
+Saved model parameters to: /root/nanochat_cache_a9/base_checkpoints/a9/model_002320.pt
+Peak memory usage: 3443.53MiB
+Total training time: 37.87m
+Minimum validation bpb: 0.956752
+
+=== A9 SFT (vastai_train_a9.ipynb Cell 6) ===
+(Jupyter's displayed cell output was lost -- same "database is locked" issue hit on a10 --
+recovered the result directly from the saved checkpoint metadata instead of guessing:)
+$ cat ~/nanochat_cache_a9/chatsft_checkpoints/a9/meta_000032.json
+{
+  "step": 32,
+  "val_bpb": 0.6125853730599086,
+  "model_config": {"sequence_len": 2048, "vocab_size": 16384, "n_layer": 7, "n_head": 4, "n_kv_head": 4, "n_embd": 512, "window_pattern": "L"},
+  "user_config": {"run": "dummy", "model_tag": "a9", "num_iterations": 500, "eval_every": 100, "mmlu_epochs": 0, "gsm8k_epochs": 0}
+}
+
+=== A9 chat test + eval_repetition (Cell 7) ===
+Assistant (prompt "hi"): I'm currently working with a project on the effectiveness of my new
+hydroponic garden. To achieve this, I'll need to develop an innovative approach that involves
+integrating multiple technology and gardening tools into the mix. [... continues, coherent but
+off-topic, no repetition ...]
+
+Assistant (prompt "What is your name?"): My name is Emily Liam "Meet" John, and I'm a 19-year-old
+from the Baltic Sea. My father was an English engineer at the time [... continues, grammatically
+fluent but internally incoherent/invented ...]
+
+=== a9 (sft) | repetition_penalty=1.2 no_repeat_ngram_size=3 ===
+generations: 30 (10 prompts x 3 seeds)
+avg distinct-1: 0.8167
+avg distinct-2: 0.9865
+worst max-4gram-repeat: 1
+generations with a loop (same 4-gram repeated >=3x): 0/30
+
+=== A9 chat_eval.py -x 200 (Cell 8) ===
+ARC-Easy accuracy: 24.00% (48/200)
+ARC-Challenge accuracy: 31.00% (62/200)
+MMLU accuracy: 23.50% (47/200)
+GSM8K accuracy: 0.00% (0/200)
+HumanEval accuracy: 0.00% (0/164)
+ChatCORE metric: 0.0093
+
+=== A9 BLiMP eval (Cell 9) ===
+[1/67] adjunct_island: 74.6%
+[2/67] anaphor_gender_agreement: 65.1%
+[3/67] anaphor_number_agreement: 92.8%
+[4/67] animate_subject_passive: 66.7%
+[5/67] animate_subject_trans: 76.3%
+[6/67] causative: 65.7%
+[7/67] complex_NP_island: 51.3%
+[8/67] coordinate_structure_constraint_complex_left_branch: 67.7%
+[9/67] coordinate_structure_constraint_object_extraction: 63.8%
+[10/67] determiner_noun_agreement_1: 95.4%
+[11/67] determiner_noun_agreement_2: 92.3%
+[12/67] determiner_noun_agreement_irregular_1: 86.3%
+[13/67] determiner_noun_agreement_irregular_2: 89.2%
+[14/67] determiner_noun_agreement_with_adj_2: 90.1%
+[15/67] determiner_noun_agreement_with_adj_irregular_1: 81.7%
+[16/67] determiner_noun_agreement_with_adj_irregular_2: 84.4%
+[17/67] determiner_noun_agreement_with_adjective_1: 91.9%
+[18/67] distractor_agreement_relational_noun: 80.6%
+[19/67] distractor_agreement_relative_clause: 69.2%
+[20/67] drop_argument: 71.2%
+[21/67] ellipsis_n_bar_1: 58.1%
+[22/67] ellipsis_n_bar_2: 89.4%
+[23/67] existential_there_object_raising: 72.2%
+[24/67] existential_there_quantifiers_1: 95.7%
+[25/67] existential_there_quantifiers_2: 27.9%
+[26/67] existential_there_subject_raising: 83.3%
+[27/67] expletive_it_object_raising: 70.3%
+[28/67] inchoative: 61.4%
+[29/67] intransitive: 70.3%
+[30/67] irregular_past_participle_adjectives: 94.6%
+[31/67] irregular_past_participle_verbs: 68.2%
+[32/67] irregular_plural_subject_verb_agreement_1: 87.8%
+[33/67] irregular_plural_subject_verb_agreement_2: 87.1%
+[34/67] left_branch_island_echo_question: 47.4%
+[35/67] left_branch_island_simple_question: 60.9%
+[36/67] matrix_question_npi_licensor_present: 65.2%
+[37/67] npi_present_1: 61.6%
+[38/67] npi_present_2: 66.3%
+[39/67] only_npi_licensor_present: 94.0%
+[40/67] only_npi_scope: 64.0%
+[41/67] passive_1: 81.8%
+[42/67] passive_2: 76.2%
+[43/67] principle_A_c_command: 72.4%
+[44/67] principle_A_case_1: 100.0%
+[45/67] principle_A_case_2: 91.8%
+[46/67] principle_A_domain_1: 94.2%
+[47/67] principle_A_domain_2: 65.7%
+[48/67] principle_A_domain_3: 54.3%
+[49/67] principle_A_reconstruction: 51.2%
+[50/67] regular_plural_subject_verb_agreement_1: 88.2%
+[51/67] regular_plural_subject_verb_agreement_2: 87.9%
+[52/67] sentential_negation_npi_licensor_present: 96.2%
+[53/67] sentential_negation_npi_scope: 40.9%
+[54/67] sentential_subject_island: 56.0%
+[55/67] superlative_quantifiers_1: 72.2%
+[56/67] superlative_quantifiers_2: 64.0%
+[57/67] tough_vs_raising_1: 41.9%
+[58/67] tough_vs_raising_2: 87.5%
+[59/67] transitive: 73.4%
+[60/67] wh_island: 58.4%
+[61/67] wh_questions_object_gap: 67.0%
+[62/67] wh_questions_subject_gap: 90.5%
+[63/67] wh_questions_subject_gap_long_distance: 92.2%
+[64/67] wh_vs_that_no_gap: 92.5%
+[65/67] wh_vs_that_no_gap_long_distance: 95.8%
+[66/67] wh_vs_that_with_gap: 31.6%
+[67/67] wh_vs_that_with_gap_long_distance: 17.3%
+
+=== BLiMP overall: 73.48% across 67 categories ===
+(50% = chance, ~96.4% = human agreement per Warstadt et al. 2020)

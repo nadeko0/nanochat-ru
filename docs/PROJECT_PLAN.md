@@ -61,22 +61,22 @@ reason.
       pass. No real signal to learn from at ~0% baseline GSM8K accuracy --
       RL sharpens existing capability, there wasn't any to sharpen. See
       kaggle/runs/2026-08-11_d6_chat_rl.ipynb.
-- [x] A8 (interim). `d4` vs `d6` side-by-side comparison table done in
+- [x] A8 (interim). `d4`/`d6`/`a10`/`a9` four-way comparison table done in
       README.md's Evaluation section + RESEARCH_LOG.md's dated entries.
-      Will be re-opened to add A9/A10 (and A-opt-1, if run) rows once those
-      finish, and to state a final pick then.
-- [ ] A9. Smaller `--vocab-size` experiment, sized against `d6`'s budget
-      (our current best model, not `d4`): `--vocab-size=16384 --depth=7`
-      (default aspect-ratio) -> `model_dim=512`, **72.35M params** (close
-      to `d6`'s 73.53M), non-embedding fraction 30.4% vs `d6`'s 14.4%.
-      Requires retraining the tokenizer (different vocab_size, isolated in
-      its own dir/Drive path so it can't collide with the shared
-      `vocab_size=32768` tokenizer -- see RESEARCH_LOG.md). Estimated
-      ~7.9h on Kaggle T4x2, likely ~50min on the same rented RTX 5070 Ti
-      given A10's measured ~9.6x speedup. Notebook ready:
-      `vastai/vastai_train_a9.ipynb` (full tokenizer-retrain -> pretrain ->
-      SFT -> eval pipeline, with `vastai/prune_checkpoints.py` running in
-      the background to avoid A10's disk-full pattern). Not run yet.
+      A9 is the clean-sweep winner (best pretrain bpb, SFT bpb, CORE,
+      BLiMP, repetition metric) -- current pick for "best English
+      architecture" pending A-opt-1 (tied embeddings), still optional.
+- [x] A9. Smaller `--vocab-size` experiment: `--vocab-size=16384 --depth=7`
+      -> `model_dim=512`, 72,351,976 params. Pretrain: 2320 steps, 608.17M
+      tokens, 37.87 min on a rented RTX 5070 Ti, **min val_bpb 0.956752**
+      (best of all four English models), CORE metric 0.0949. SFT: 32/32
+      steps, **min val_bpb 0.612585** (also best of all four -- unlike
+      A10, this advantage held through SFT, not just pretrain).
+      `eval_repetition`: distinct-1 0.8167, 0/30 loops (best). `chat_eval`
+      (sampled `-x 200`): baseline on ARC/MMLU/GSM8K/HumanEval like every
+      other model, ChatCORE +0.0093 (only positive one, not fully
+      comparable given the sampling). **BLiMP: 73.48%, best of all four.**
+      A clean sweep, unlike A10's mixed result -- see RESEARCH_LOG.md.
 - [x] A10 (pretrain). `--aspect-ratio=48 --depth=7` (model_dim=384, same
       width as `d6`, 7 layers instead of 6, 87.88M params) pretrained on a
       rented Vast.ai RTX 5070 Ti instead of Kaggle (`vastai/run_a10.sh`).
@@ -99,7 +99,8 @@ reason.
 
 - [ ] A-opt-1. Tied `wte`/`lm_head` experiment (see RESEARCH_LOG.md open
       items) — upstream deliberately keeps them untied; unclear if that's
-      right at our scale.
+      right at our scale. Should be sized against `a9`'s budget now (the
+      current leading architecture), not `d4`'s original framing.
 
 ## Phase B — Russian
 
@@ -122,7 +123,8 @@ reason.
 
 - [ ] C1. Final consolidated results table (all English + Russian variants)
       in README.md.
-- [ ] C2. Every real run archived with full output in `kaggle/runs/`.
+- [ ] C2. Every real run archived with full output (or a console log where
+      that failed) in `kaggle/runs/` / `vastai/runs/`.
 - [ ] C3. RESEARCH_LOG.md gets a closing "conclusions" section — what worked,
       what didn't, what I'd do differently.
 - [ ] C4. CHANGELOG.md up to date with the final commit.
@@ -130,11 +132,11 @@ reason.
 
 ---
 
-Progress snapshot: as of 2026-08-11, Phase A: A1-A8(interim), A10 all done.
-A10 on a rented Vast.ai RTX 5070 Ti: best pretrain bpb (0.977060) and best
-BLiMP (72.13%) of all three English models, ~9.6x measured speedup vs
-Kaggle T4x2 -- but SFT bpb (0.6285) landed between `d4`/`d6`, not a clean
-win across every metric. A9 up next on the same instance via the new
-`vastai/vastai_train_a9.ipynb` (full self-contained pipeline with
-checkpoint pruning to avoid A10's disk-full lessons). Phases B and C not
-started (deliberately deferred).
+Progress snapshot: as of 2026-08-11, Phase A: A1-A10 all done, A9 done.
+Both architecture experiments ran on a rented Vast.ai RTX 5070 Ti instead
+of Kaggle (~9.6x measured speedup). **A9 is the standout**: clean sweep
+across pretrain bpb (0.956752), SFT bpb (0.612585), CORE (0.0949), BLiMP
+(73.48%), and repetition metric -- best of all four English models on
+every axis measured. A10 won on pretrain bpb/BLiMP but not SFT bpb, a
+more mixed result. Remaining optional item: A-opt-1 (tied embeddings).
+Phases B and C not started (deliberately deferred).

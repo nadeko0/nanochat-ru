@@ -97,13 +97,31 @@ rclone lsd gdrive:   # sanity check -- should list folders (or be empty), not an
 ## 5. Layout on Drive
 
 Everything lives under the folder from step 2 (`gdrive:` root, since
-`root_folder_id` already scopes it), mirroring `$NANOCHAT_BASE_DIR` locally:
+`root_folder_id` already scopes it), mirroring `$NANOCHAT_BASE_DIR` locally.
+Per-model checkpoints are namespaced by `--model-tag` subfolder automatically
+(`base_checkpoints/<tag>/`, `chatsft_checkpoints/<tag>/`), so different
+models sharing the same `vocab_size=32768` tokenizer coexist safely:
 
 ```
 gdrive:
-  tokenizer/                     # trained BPE tokenizer + token_bytes.pt
-  base_data_climbmix/            # (optional) cached pretraining shards, see kaggle_train.ipynb Cell 3
-  base_checkpoints/d4/           # real pretraining checkpoints (model_/optim_/meta_ per step)
+  tokenizer/                     # shared BPE tokenizer (vocab_size=32768) -- d4, d6, a10 all load this
+  tokenizer_a9/                  # SEPARATE tokenizer (vocab_size=16384) -- a9 only, see the gotcha below
+  base_data_climbmix/            # cached pretraining shards, shared across all models/vocab sizes
+  base_checkpoints/d4/           # d4 pretraining checkpoints (model_/optim_/meta_ per step)
   base_checkpoints/d4-smoketest/ # SMOKE_TEST checkpoints -- separate tag, never resumed into the real run
-  chatsft_checkpoints/d4/        # SFT checkpoints
+  base_checkpoints/d6/           # d6, a10, a9's base checkpoints similarly, one folder per --model-tag
+  chatsft_checkpoints/d4/        # SFT checkpoints, same per-tag convention
 ```
+
+**Gotcha, hit for real on A9** (see docs/RESEARCH_LOG.md 2026-08-11): the `tokenizer/` path is
+**not** namespaced by model tag the way checkpoints are -- `nanochat/tokenizer.py` always writes
+to `{NANOCHAT_BASE_DIR}/tokenizer`, and `kaggle/sync_checkpoints.py`'s background sync always
+targets `gdrive:tokenizer`. Training a tokenizer with a *different* `vocab_size` (as A9 did,
+16384 instead of the shared 32768) while pointed at the same `NANOCHAT_BASE_DIR`/sync setup as
+an existing model would silently overwrite that model's tokenizer on Drive. The fix used for
+A9: a separate `NANOCHAT_BASE_DIR` (so the new tokenizer trains into an isolated local path), a
+manual one-time `rclone copy` to a distinct remote path (`gdrive:tokenizer_a9`, not
+`gdrive:tokenizer`), and `sync_checkpoints.py --skip-subdirs tokenizer` for the background sync
+during training (so it never touches `tokenizer/` at all). See
+`vastai/vastai_train_a9.ipynb` Cells 2-3 for the working pattern if this project ever needs a
+third vocab_size.

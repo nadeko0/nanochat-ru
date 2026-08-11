@@ -801,12 +801,78 @@ tokenizer-retrain -> pretrain -> SFT -> eval pipeline, with `vastai/prune_checkp
 running in the background to keep only the last 3 local steps -- direct fix for the disk-full
 pattern hit twice now on `a10`).
 
+## 2026-08-11 -- A9 complete: clean sweep across every metric, the best English model yet
+
+Ran `vastai_train_a9.ipynb` on the same rented RTX 5070 Ti right after A10. Two real bugs
+caught and fixed before/during the run (both logged, not silently worked around):
+`base_train.py` has no `--vocab-size` flag (it reads vocab_size from whichever tokenizer is
+in `NANOCHAT_BASE_DIR` -- Cell 3 already trains the right one there, so the flag was just an
+argparse error); and Jupyter lost the SFT cell's displayed output a second time ("database is
+locked", same as A10) -- recovered the real `val_bpb` directly from the saved checkpoint's
+`meta_000032.json` rather than guessing or leaving it blank. Both notebooks now `tee` SFT
+output to a log file on disk so this can't happen a third time.
+
+**Pretrain**: `--vocab-size=16384 --depth=7` (default aspect_ratio -> `model_dim=512`),
+72,351,976 params, 2320 steps, 608.17M tokens (ratio=20), **37.87 min** on the RTX 5070 Ti
+(slower wall-clock than A10's 28.74 min despite fewer total params -- more tokens needed
+(608M vs 499M) and heavier per-token compute at `model_dim=512` vs A10's 384, consistent with
+A9's higher non-embedding fraction). Peak memory only 3,443MiB (much lower than `d6`/`a10` --
+smaller vocab means much less embedding-table memory). **Min validation bpb: 0.956752** --
+beats `d4` (1.0994), `d6` (0.9945), and `a10` (0.977060). Base-model CORE metric: **0.0949**,
+also the best of the two data points we have this metric for (`a10`: 0.0747) -- a genuinely
+comparable apples-to-apples comparison since both used the same eval_bundle methodology.
+
+**SFT**: 32/32 steps (SmolTalk bestfit-packing exhausted at the same step count as `a10`,
+coincidence of similar packing behavior, not a bug). **Min validation bpb: 0.612585** -- beats
+`d4` (0.6616), `d6` (0.6169), and `a10` (0.6285). Unlike `a10`, where the pretrain-bpb
+advantage didn't carry over to SFT, **A9's advantage holds at every stage measured so far**.
+
+**Chat test** (2 prompts, repetition-penalty fix active): "hi" -> a coherent but off-topic
+paragraph about a hydroponic-garden AI project; "What is your name?" -> grammatically fluent
+but internally invented/incoherent ("My name is Emily Liam 'Meet' John... 19-year-old from the
+Baltic Sea..."). Same qualitative pattern as every other model so far -- fluent, doesn't
+reliably answer the actual question.
+
+**`eval_repetition.py`** (first real run of this metric on an A9/A10-generation model):
+distinct-1 **0.8167**, distinct-2 **0.9865**, 0/30 loops -- edges out `d4` (0.7917/0.9848) and
+`d6` (0.8039/0.9864), the best of the three models with this metric measured. (`a10` still
+doesn't have this number -- the notebook cell was added after that session ran.)
+
+**`chat_eval.py`**, run with **`-x 200`** (sampled, not the full unsampled test sets `d4`/`d6`/
+`a10` got -- GSM8K/HumanEval's generative evaluation dominated `a10`'s full run, ~46 of ~50
+total minutes, for a task already floored at 0% on every model tried; capping every task to
+200 problems keeps `chat_eval.py`'s `all_tasks_were_evaluated` gate satisfied so ChatCORE still
+computes, on a smaller but still-informative sample): ARC-Easy 24.00% (48/200), ARC-Challenge
+**31.00%** (62/200 -- ~6pp above the 25% baseline, but at n=200 the binomial standard deviation
+is ~3pp, so this is plausibly noise, not a real signal, and not treated as one), MMLU 23.50%
+(47/200), GSM8K 0.00% (0/200), HumanEval 0.00% (0/164), **ChatCORE +0.0093** -- the only
+positive ChatCORE of the four models (`d4` -0.0109, `d6` -0.0127, `a10` -0.0113), though this
+isn't a clean apples-to-apples comparison given the sampled vs full-test-set methodology
+difference, and all four values are close enough to zero that "no real knowledge/reasoning
+capability" remains the honest read regardless of sign.
+
+**`eval_blimp.py`** (full, 67 x 1000 pairs, unsampled -- same methodology as the other three):
+**73.48% overall** -- the best of all four English models (`d4` 66.46%, `d6` 70.31%, `a10`
+72.13%, `a9` 73.48%), continuing the same trend BLiMP has shown at every step: reallocating
+budget away from a 32768-entry vocab toward more transformer capacity (whether via `a10`'s
+extra depth or `a9`'s smaller vocab) reliably buys grammatical competence, monotonically so
+far across all three architecture variants tried.
+
+**Overall read**: A9 is a genuinely clean sweep -- best pretrain bpb, best SFT bpb, best CORE,
+best BLiMP, best repetition metric -- unlike A10, which won on pretrain bpb and BLiMP but
+landed worse on SFT bpb than `d6`. Tentative conclusion (three data points, not enough to be
+fully confident): reallocating the embedding-dominated budget toward *smaller vocabulary* was
+a more effective lever at this scale than *more depth at fixed width*. Still true across every
+model so far: none of this moves chat_eval/GSM8K/HumanEval off the random-guessing floor --
+that gap remains a scale problem, not an architecture problem.
+
 ## Open questions / next up
-- Consider a tied-embeddings experiment (`wte`==`lm_head`): at `d4`,
-  embeddings are ~46% of total params (untied by upstream design, see
-  `nanochat/gpt.py` docstring "untied weights for token embedding and lm_head").
-  Tying them would free ~8.4M params' worth of budget at this depth -- unclear
-  if that's better spent as more transformer capacity or just makes the
-  embedding table itself weaker. Not started.
+- Consider a tied-embeddings experiment (`wte`==`lm_head`, A-opt-1): untied
+  by upstream design (see `nanochat/gpt.py` docstring). Given A9's clean
+  sweep, should be sized against **`a9`'s budget** (72.35M, `vocab_size=16384`)
+  now that it's the leading architecture, not `d4`'s original 46%-embedding
+  framing -- `a9` is already less embedding-dominated (smaller vocab), so
+  the params freed by tying would be a smaller fraction here than the
+  original `d4` estimate suggested. Not started, not sized yet.
 - Phase 2 (Russian) intentionally deferred until the English side is judged
-  "as done as it's going to get" within the free-tier budget.
+  "as done as it's going to get" within the free-tier/rented budget.

@@ -35,7 +35,7 @@ way: no `kaggle_secrets` API, no notebook cells -- just a shell.
 4. Click Rent. A fresh (uncached) image pull can take 10-60 minutes; a
    cached one starts in seconds.
 
-## 2. SSH access
+## 2. Getting a shell on the box
 
 1. Generate a key locally if you don't have one:
    `ssh-keygen -t ed25519 -C "your_email@example.com"`
@@ -46,6 +46,17 @@ way: no `kaggle_secrets` API, no notebook cells -- just a shell.
    e.g. `ssh -p 20544 root@<host>`. You land in a `tmux` session by default
    -- if the SSH connection drops, `ssh` back in and run `tmux attach` to
    pick the running job back up rather than losing it.
+
+**In practice, the SSH connect string can be hard to find in the Vast.ai UI** (it's easy to
+land on the Instance Portal -- a separate web dashboard the instance itself runs, exposing
+Jupyter/Syncthing/Tensorboard via Cloudflare quick tunnels -- instead of the actual `ssh -p
+PORT root@host` line, which lives elsewhere on the Instances card). If it's not obvious, the
+**Jupyter Terminal** app (visible from the Instance Portal, or via the instance's Jupyter link)
+is a working alternative that needs no SSH string at all -- a real shell in the browser, same
+box, same `tmux`-less persistence caveat (closing the tab doesn't kill the process, but there's
+no `tmux attach` equivalent to reconnect to a specific pane). This project's two Vast.ai
+notebooks (`vastai/vastai_eval_a10.ipynb`, `vastai/vastai_train_a9.ipynb`) are written to be
+run cell-by-cell in the instance's own Jupyter app for exactly this reason -- no SSH needed.
 
 ## 3. Get the checkpoint credentials onto the box
 
@@ -91,14 +102,47 @@ clone+deps, rclone from the env vars above, a VRAM probe to pick a safe
 `--device-batch-size` for *this* GPU (no torchrun/DDP needed -- single GPU,
 so this differs from the Kaggle notebooks' `--nproc_per_node=2` launches),
 pretrain, SFT, then a quick chat + repetition-metric check. Checkpoints
-sync to Drive continuously, same as the Kaggle notebooks.
+sync to Drive continuously, same as the Kaggle notebooks. In practice,
+`run_a10.sh`'s SFT step ended up incomplete in the one real run so far --
+finished it (plus the full eval suite) afterward via
+[vastai/vastai_eval_a10.ipynb](../vastai/vastai_eval_a10.ipynb) instead,
+cell by cell in the Jupyter Terminal's Jupyter app. For a from-scratch
+architecture variant (different `--vocab-size`/`--depth`/`--aspect-ratio`),
+[vastai/vastai_train_a9.ipynb](../vastai/vastai_train_a9.ipynb) is a fuller
+template: tokenizer retrain -> pretrain -> SFT -> eval in one notebook.
+
+**Two gotchas worth knowing before running any of these, both hit for real
+(see docs/RESEARCH_LOG.md 2026-08-11):**
+
+- **Disk-full checkpoint accumulation.** `save_checkpoint()` keeps every
+  `--save-every` step's checkpoint on local disk forever -- fine on Kaggle's
+  ephemeral sessions, not fine on a rented box's fixed disk. Either budget
+  disk generously (see step 1.3 above) or run
+  [vastai/prune_checkpoints.py](../vastai/prune_checkpoints.py) in the
+  background (used in `vastai_train_a9.ipynb`) to keep only the last few
+  local steps once each has synced to Drive.
+- **Tokenizer collisions across architecture variants.** `nanochat/tokenizer.py`
+  always writes to `{NANOCHAT_BASE_DIR}/tokenizer` -- there's no
+  vocab-size-specific path, and `kaggle/sync_checkpoints.py`'s background
+  sync always targets `gdrive:tokenizer`. Training a *different*
+  `--vocab-size` tokenizer with the same `NANOCHAT_BASE_DIR`/sync setup as
+  an existing model would silently overwrite that model's tokenizer on
+  Drive. If you ever need two tokenizers side by side, use a separate
+  `NANOCHAT_BASE_DIR`, a separate Drive path for the new tokenizer, and
+  `sync_checkpoints.py --skip-subdirs tokenizer` for the background sync --
+  see `vastai_train_a9.ipynb` Cells 2-3 for the working pattern.
 
 ## 5. When done
 
 - **Stop** the instance to pause GPU billing (storage still accrues small
   charges).
 - **Delete** it to stop all charges once you've confirmed the results synced
-  to Drive (check `kaggle/kaggle_eval.ipynb`-style verification, or just
-  `rclone lsf gdrive:chatsft_checkpoints/a10` from anywhere).
+  to Drive (`vastai/vastai_eval_a10.ipynb`/`vastai_train_a9.ipynb`-style
+  verification, or just `rclone lsf gdrive:chatsft_checkpoints/<tag>` from
+  anywhere).
 - Balance hitting $0 auto-stops running instances (data isn't deleted
   immediately, but stops accruing new charges beyond storage).
+- A full pretrain+SFT+eval cycle for a `d6`-scale model has cost well under
+  $1 on a ~$0.14/hr card so far (a10 and a9 combined) -- renting is cheap at
+  this project's model scale, the time savings (~9.6x measured) matter more
+  than the money.

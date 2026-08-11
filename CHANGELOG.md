@@ -2,8 +2,33 @@
 
 Notable changes to this repo, newest first. See [docs/RESEARCH_LOG.md](docs/RESEARCH_LOG.md)
 for the reasoning/dead-ends behind these changes, [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md)
-for the tracked checklist, and [kaggle/runs/](kaggle/runs/) for the full-output notebooks
-behind each result.
+for the tracked checklist, and [kaggle/runs/](kaggle/runs/) / [vastai/runs/](vastai/runs/) for
+the full-output notebooks/console logs behind each result.
+
+## 2026-08-11 (cont'd, 6)
+
+- **A9 complete — clean sweep, best English model yet.** `--vocab-size=16384 --depth=7`
+  (72.35M params) on the same rented RTX 5070 Ti: pretrain 2320 steps/608.2M tokens/37.87 min,
+  **min val_bpb 0.956752** (beats `d4`/`d6`/`a10`), CORE 0.0949. SFT 32/32 steps, **min val_bpb
+  0.612585** (also beats all three — unlike `a10`, this advantage held through SFT).
+  `eval_repetition`: distinct-1 0.8167, 0/30 loops, best of all. `chat_eval` (sampled `-x 200`
+  — GSM8K/HumanEval's generative eval dominated `a10`'s full run for a task already floored at
+  0%): baseline on ARC/MMLU/GSM8K/HumanEval, ChatCORE +0.0093. **BLiMP 73.48%, best of all
+  four.** Tentative read: smaller-vocab reallocation (A9) beat more-depth (A10) as an
+  architecture lever at this scale. Full breakdown: docs/RESEARCH_LOG.md.
+- Caught and fixed 3 real bugs before/during the A9 run, each logged: `base_train.py` has no
+  `--vocab-size` flag (reads it from the tokenizer already in `NANOCHAT_BASE_DIR` instead);
+  `sync_checkpoints.py`'s "tokenizer" subdir always targets the shared `gdrive:tokenizer`
+  remote regardless of `NANOCHAT_BASE_DIR` — would have silently overwritten the `d4`/`d6`/
+  `a10` tokenizer with A9's during the background sync (added a `--skip-subdirs` flag); and
+  Jupyter lost the SFT cell's displayed output a second time ("database is locked") — piped
+  SFT through `tee` in both Vast.ai notebooks going forward, and recovered A9's real val_bpb
+  from the saved checkpoint's `meta_000032.json` instead of leaving it blank or guessing.
+- Refreshed README/CHANGELOG/PROJECT_PLAN/RESEARCH_LOG for the four-way `d4`/`d6`/`a10`/`a9`
+  comparison, fixed several stale references (the "Training workflow" section still described
+  `kaggle_train_a10.ipynb` as the live A10 plan after A10 had already moved to Vast.ai; the old
+  eval summary paragraph only mentioned two models). Removed a stray, output-less duplicate of
+  `vastai_eval_a10.ipynb` that had ended up at the repo root instead of `vastai/`.
 
 ## 2026-08-11 (cont'd, 5)
 

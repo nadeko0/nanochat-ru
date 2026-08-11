@@ -54,8 +54,13 @@ reason.
       (and `d4`/`d6`'s chat_eval scores above), and `d6` measurably ahead of
       `d4` here, unlike on the knowledge/reasoning tasks. See
       kaggle/runs/2026-08-11_chat_eval_blimp_d4_d6.ipynb.
-- [ ] A7. `chat_rl.py` — RL pass, low expectation, log the actual result
-      either way.
+- [x] A7. `chat_rl.py` on `d6` (bounded run: 480 GSM8K examples via a new
+      `--max-train-examples` flag, 30/30 steps complete). Confirmed the low
+      expectation: average reward was exactly 0.0 on 508/510 logged steps
+      (2 nonzero: 0.0078, 0.125), Pass@1 0%, Pass@8 2% at the single eval
+      pass. No real signal to learn from at ~0% baseline GSM8K accuracy --
+      RL sharpens existing capability, there wasn't any to sharpen. See
+      kaggle/runs/2026-08-11_d6_chat_rl.ipynb.
 - [ ] A8. Consolidate: side-by-side comparison of all English variants tried
       (`d4`, `d6`, and anything from A9/A10) in README + RESEARCH_LOG.md,
       pick a final English model.
@@ -102,5 +107,5 @@ reason.
 
 ---
 
-Progress snapshot: as of 2026-08-11, Phase A: A1-A6.5 done, A7 (chat_rl)
-next; Phases B and C not started (deliberately deferred).
+Progress snapshot: as of 2026-08-11, Phase A: A1-A7 done, A8 (consolidate)
+next, A9/A10 optional; Phases B and C not started (deliberately deferred).

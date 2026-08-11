@@ -52,6 +52,11 @@ log — including dead ends and things that didn't work — and
   2020](https://arxiv.org/abs/1912.00582)): **`d4` 66.46%, `d6` 70.31%** —
   both well above the 50% chance level, and `d6` measurably ahead here,
   unlike on chat_eval. Full numbers: RESEARCH_LOG.md.
+- **RL (`chat_rl.py`) on `d6`, bounded run (480 GSM8K examples): confirms
+  the low expectation.** 508/510 logged reward values were exactly 0.0 —
+  essentially no reward signal to learn from at ~0% baseline GSM8K accuracy.
+  RL sharpens existing capability rather than creating it; there wasn't any
+  here to sharpen. Full numbers: RESEARCH_LOG.md.
 - **Phase 2 (Russian): deferred** until the English side is judged "done
   enough" within the free-tier compute budget.
 

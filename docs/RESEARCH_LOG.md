@@ -448,6 +448,37 @@ knowledge/reasoning (MMLU/GSM8K-style) is not -- more params/data moves
 the needle on the former and not on the latter, at least across the `d4`
 to `d6` jump tested here.
 
+## 2026-08-11 -- A7: chat_rl.py on d6 (bounded), confirms the low expectation
+
+Full GSM8K train set (7473 examples) at default settings would have meant
+hundreds of thousands of rollout generations across ~467 steps -- many
+hours for a model already measured at ~0% GSM8K accuracy (A6). Added
+`--max-train-examples` to `scripts/chat_rl.py` (wires up
+`tasks.common.Task`'s existing `stop` kwarg, already used elsewhere for
+similar slicing, just not exposed via this script's CLI) and ran a bounded
+version instead: 480 examples, 8 samples/example, 128 max generated
+tokens, `d6` only. Full log: `kaggle/runs/2026-08-11_d6_chat_rl.ipynb`.
+
+Also hit a small, easy-to-repeat mistake: first launch used the `--`
+separator (`python -m scripts.chat_rl -- --model-tag=...`), copied from the
+`torchrun`-launched training commands elsewhere in this project. `--` is
+`torchrun`'s own convention for splitting its args from the wrapped
+script's; plain `python -m` doesn't use it, so argparse choked on a literal
+`"--"` token. Fixed by dropping it for this single-GPU, non-torchrun script.
+
+30/30 steps completed, checkpoint saved to `chatrl_checkpoints/d6` and
+synced. Result: **508 of 510 logged "Average reward" values were exactly
+0.0** (the 2 exceptions: 0.0078125 and 0.125). Pass@1 0%, Pass@8 2% at the
+single eval pass (step 0; `eval_every=60` default never re-triggered within
+30 total steps). This confirms the expectation stated when A7 was
+planned -- RL sharpens existing capability rather than creating it, and at
+~0% baseline GSM8K accuracy there was essentially nothing to sharpen. A
+harmless `Exception ignored in: <generator object get_batch...>` /
+`AttributeError` appeared in the log after the checkpoint save completed --
+interpreter-shutdown noise from garbage-collecting the training loop's
+infinite `itertools.cycle` generator, not a real failure (training and
+saving had already finished successfully by that point).
+
 ## Open questions / next up
 - Consider a tied-embeddings experiment (`wte`==`lm_head`): at `d4`,
   embeddings are ~46% of total params (untied by upstream design, see
@@ -455,8 +486,5 @@ to `d6` jump tested here.
   Tying them would free ~8.4M params' worth of budget at this depth -- unclear
   if that's better spent as more transformer capacity or just makes the
   embedding table itself weaker. Not started.
-- Whether `chat_rl.py` (RL stage) is worth trying at this scale -- expectation
-  going in is low (RL tends to sharpen existing capability more than create
-  it), will log the actual result either way.
 - Phase 2 (Russian) intentionally deferred until the English side is judged
   "as done as it's going to get" within the free-tier budget.

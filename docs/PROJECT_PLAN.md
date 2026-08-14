@@ -189,3 +189,12 @@ a compute-scale problem, not something this budget or any lever tried here can c
 Deferred, not tracked here: the "just wants to talk" overtraining experiment and the personal
 multilingual domain-model idea, both parked in `dev-ignore/IDEAS.md` (git-ignored, not part of
 this checklist) for whenever there's appetite to pick them up.
+
+**Closing coda (also untracked, but committed, not deferred)**: ran a direct side-by-side
+against two real open small models (SmolLM2-135M, Qwen2.5-0.5B) on the same 28-prompt sets used
+for `a9`/`ru_v32768`, to finally measure the gap that motivated this whole project's original
+"reality check" back on 2026-08-10. Confirmed with real quoted examples rather than a vague
+impression: a same-size real model beats this project's best English model because of training
+data scale (~18,000x more tokens), and loses to this project's Russian model on Russian because
+it wasn't meaningfully trained on it. See [comparisons/](../comparisons/) and
+docs/RESEARCH_LOG.md 2026-08-14 "External comparison".

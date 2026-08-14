@@ -5,6 +5,22 @@ for the reasoning/dead-ends behind these changes, [docs/PROJECT_PLAN.md](docs/PR
 for the tracked checklist, and [kaggle/runs/](kaggle/runs/) / [vastai/runs/](vastai/runs/) for
 the full-output notebooks/console logs behind each result.
 
+## 2026-08-14 (cont'd, 2)
+
+- **Added [comparisons/](comparisons/): honest side-by-side vs. real open small models**, run
+  after Phase C closed (not part of the tracked checklist, a closing coda). Downloaded
+  `HuggingFaceTB/SmolLM2-135M-Instruct` (134.5M params, same scale as `ru_v32768`) and
+  `Qwen/Qwen2.5-0.5B-Instruct` (494M — the actual model referenced in this project's very first
+  research entry) and ran both against the same 28-prompt set used for `a9` (EN) and
+  `ru_v32768` (RU). Fixed a `transformers` 5.15.0 API-change bug (`apply_chat_template`
+  now returns a `BatchEncoding`, not a bare tensor — needs `return_dict=True` + `**inputs`).
+  Headline finding: **SmolLM2 beats `a9` on English (same size, ~18,000x more training tokens)
+  but loses to `ru_v32768` on Russian (barely trained on it at all)** — training-data scale and
+  mixture dominate the architecture levers this project spent most of its effort on. Full
+  write-up with quoted examples: docs/RESEARCH_LOG.md 2026-08-14 "External comparison". Scripts
+  and raw output committed (not `dev-ignore/`) since this is meant to be part of the project's
+  public record.
+
 ## 2026-08-14 (cont'd)
 
 - **Phase C (project close-out) complete.** Pulled the winning Russian checkpoint

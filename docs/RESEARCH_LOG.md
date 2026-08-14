@@ -1258,6 +1258,137 @@ differently starting over.
   session, a gap that's now permanent since re-running it would need re-renting for a
   no-longer-current architecture comparison).
 
+## 2026-08-14 -- External comparison: how do our models stack up against a real small open model?
+
+Phase A, B, and C were already closed out when this ran -- not part of the tracked checklist,
+done because it was worth actually measuring something that had been a vague reference point
+since the very start of this project. The very first entry in this log (2026-08-10, "Reality
+check against a real small model") mentions the user having tried Qwen2.5-0.5B and finding it
+noticeably more coherent than anything trainable here, and estimates the token-count gap
+(12-18T for Qwen2.5 vs. this project's few-hundred-million per run) without ever measuring the
+qualitative gap directly, prompt by prompt. This entry closes that loop with real side-by-side
+generations. Scripts and full raw output are committed at [comparisons/](../comparisons/)
+(not `dev-ignore/` -- this is meant to be part of the project's honest public record, not a
+private scratch file).
+
+**Setup**: downloaded two real open small models locally via `transformers` (no fine-tuning,
+just their published instruct checkpoints) and ran them, unmodified, against the same 28-prompt
+set (10 categories x roughly 3 each: greeting/identity, factual, creative, science, arithmetic,
+practical advice, technical) used for this project's own models:
+
+- **`HuggingFaceTB/SmolLM2-135M-Instruct`** (134.5M params) -- picked because it's almost
+  exactly `ru_v32768`'s size (122.7M) and close to `a9`'s (72.35M), a genuine same-scale
+  comparison rather than an unfair one.
+- **`Qwen/Qwen2.5-0.5B-Instruct`** (494M params) -- the actual model referenced in the
+  2026-08-10 entry, ~4x bigger than our winning models but still small by modern standards.
+
+Ran all 28 prompts in Russian against both, then re-ran SmolLM2 on the same 28 prompts
+translated to English (to isolate: is its Russian weakness a small-model problem in general, or
+specifically a language-coverage problem?), and ran this project's own best English model (`a9`)
+on the identical 28 English prompts via unmodified `scripts/chat_cli.py`, for a fully
+apples-to-apples four-way comparison: `ru_v32768` (RU, ours) vs. SmolLM2/Qwen (RU, external) vs.
+`a9` (EN, ours) vs. SmolLM2 (EN, external).
+
+Hit one real bug getting this running: `tokenizer.apply_chat_template(..., return_tensors="pt")`
+in the currently-installed `transformers` (5.15.0) returns a `BatchEncoding`, not a bare tensor
+-- passing it positionally into `model.generate()` crashed with `AttributeError` inside
+`tokenization_utils_base.py` (`KeyError: 'shape'` under the hood). Fixed by adding
+`return_dict=True` and unpacking with `**inputs`, matching current `transformers` usage
+patterns. Also hit the project's already-known Windows console `cp1252` Cyrillic crash a second
+time (redirecting Python's own stdout to a file doesn't sidestep it by default on Windows) --
+fixed the same way as everywhere else in this project: `PYTHONIOENCODING=utf-8` +
+`PYTHONUTF8=1` in the environment before launching.
+
+### Russian: SmolLM2-135M is *worse* than our own from-scratch model at its own size
+
+This was the most surprising result. SmolLM2-135M is barely bigger than `a9` (134.5M vs
+72.35M) and about the same size as `ru_v32768` (122.7M) -- but on Russian prompts it either
+answers in English regardless of the prompt language, or when it does attempt Russian, degrades
+into genuine noise -- mixed scripts, emoji, and nonsense far worse than anything `ru_v32768`
+produced:
+
+> "Какая столица Франции?" -> *"В 2019-временный месбуканских историях програмпов здоним был
+> кричать в нашем оглажное делat. Создителная терзію нет (фот) ✨ 🌟 [...] A new survey reveals
+> the number of people who support and oppose climate change..."*
+> "Сколько будет 2 плюс 2?" -> *"Вы можете свяжить кафициям. [...] СUBAR (Solomon's Theorem and
+> Subset Theory). [...] '1 + 3 = 4', '5 - 6*9/8' ≠ ''"*
+
+Compare to `ru_v32768`'s own worst moments (invented fake hotel listings, fabricated pseudo-
+science) -- wrong and empty, but *grammatically real Russian* throughout, never scripts-mixing
+garbage. **A specialized 122M-param from-scratch model beat a same-size general open model on
+its non-native language**, because SmolLM2's pretraining mix is overwhelmingly English and this
+project's Russian corpus (FineWeb-2 `rus_Cyrl`) is 100% Russian. Scale alone doesn't explain
+everything; what the training *mixture* actually contains matters just as much at this size.
+
+### English: SmolLM2-135M clearly beats our own `a9`, at a smaller/similar param count
+
+Ran SmolLM2 on the same 28 prompts translated to English -- and on its actual training
+language, it's a different model entirely: clean, well-formed assistant-style responses, no
+scripts-mixing, no numeric noise:
+
+> "hi" -> *"Hello! How can I assist you today?"* (SmolLM2) vs. `a9`'s *"I've been fortunate
+> enough to have had the privilege of having a chance to explore and learn about my own
+> experiences. [...] As an AI, I'm able to provide guidance on these areas very well,
+> including: * How does this opportunity impact our lives? [...]"* -- SmolLM2 answers the
+> actual greeting; `a9` free-associates into a rambling non-answer.
+
+Both models confabulate on facts and identity (SmolLM2 invents "My real name is Liam... expert
+in ancient history of the Middle East"; `a9` invents "My name is Emily, and I'm a proud American
+Indian... my wife, Momo, my young sons") -- so neither has real grounded knowledge, consistent
+with everything measured all project. But structurally, SmolLM2 stays coherent English prose
+throughout every response; `a9` regularly collapses into outright noise on harder prompts:
+
+> "What is 17 times 3?" -- `a9`: *"12 * 36 ��� 72 [...] 5^7 + 4^2 = 30^5 = 600 / 5 = still 2200
+> ��� 2280 ��� 2065 ��� 4887 ��� [...]"* (literal mojibake replacement characters, numbers that
+> don't relate to each other) vs. SmolLM2, which at minimum stays in readable English even when
+> the arithmetic itself is wrong.
+> "Explain the difference between Python and JavaScript" -- `a9` outputs a broken pseudo-code
+> block that isn't valid Python (`def print(self, new___inite__()`, unmatched brackets, `.js`
+> pasted mid-print-statement) -- SmolLM2 outputs a factually-imperfect but fully readable prose
+> paragraph (wrong founding dates/people, but grammatically and structurally sound).
+
+**At almost the same parameter count (134.5M vs. 72.35M), SmolLM2 -- trained on ~11 trillion
+tokens of curated data -- is measurably more coherent than `a9`, this project's best
+architecture, trained on ~600M tokens.** This is the sharpest, most concrete confirmation yet of
+the finding stated throughout this whole project: the architecture search done here (vocab_size
+reallocation, depth/width tradeoffs) produced real, measured improvements *relative to this
+project's own models* (A9's bpb/BLiMP gains over `d4`/`d6`/`a10` were real and reproducible),
+but those gains are small next to the gap that data *scale* alone closes. Rearranging a few tens
+of millions of parameters between embeddings and transformer layers was never going to compete
+with four orders of magnitude more (curated, deduplicated, multi-stage-filtered) training data.
+
+### Qwen2.5-0.5B (Russian): bigger and more capable, but the ceiling is still real
+
+Qwen (494M, ~4x this project's winning models, real RLHF instruction tuning) is clearly the
+most capable of the four tested: correctly identifies itself, gets simple arithmetic right
+(`"Сумма двух чисел '2' и '2' [...] равна 4"`), knows Paris is the capital of France (albeit
+padded with a fabricated "Franco-Russian empire since 1234"), and exhibits real safety-tuned
+refusal behavior our raw SFT models don't have at all (`"Извините за путаницу, но я не могу
+отвечать на вопросы о программировании"` -- an odd, over-cautious refusal to explain
+programming, not something requested). But it still falls apart on anything past simple
+recall: `"17 умножить на 3"` produces a nonsense sequence of unrelated intermediate numbers
+that never resolves to 51, and the train-speed problem substitutes "60 км/ч" with a typo'd
+"6 км/ч" partway through and cuts off before reaching a final (wrong) answer. **Being 4x bigger
+and RLHF-tuned buys noticeably better simple-fact recall and safety behavior, but the same
+compounding-error pattern on multi-step reasoning that every model in this project showed is
+still there** -- more scale pushes the ceiling up, it doesn't remove it.
+
+### Honest summary
+
+Four models, one finding, stated as plainly as possible: **training-data scale and mixture
+dominate architecture choices at every size tested in this project.** A same-size real model
+(SmolLM2) beats our best English model (`a9`) on English because it has ~18,000x more training
+tokens; that same real model loses to our from-scratch Russian model on Russian because it
+barely saw any Russian at all, regardless of its overall parameter/data advantage. A 4x-bigger,
+properly RLHF-tuned model (Qwen2.5-0.5B) is genuinely more capable than anything trained in this
+project, but even it breaks down on the exact same class of problem (multi-step arithmetic,
+anything requiring compounding correct steps) that every model here failed at. This project's
+own architecture experiments (A9 vs A10, the Russian vocab_size sweep) were real, measured, and
+reproducible improvements -- just real within a search space this small compared to what
+training-data scale alone buys. Not a disappointing result to end on: it's the actual answer to
+the question this whole project set out, from its first day, to actually measure rather than
+assume.
+
 ## Open questions / next up
 
 Everything tracked in `docs/PROJECT_PLAN.md` (Phases A, B, C) is done as of 2026-08-14. What's

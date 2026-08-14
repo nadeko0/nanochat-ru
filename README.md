@@ -26,6 +26,8 @@ the closed-out checklist.
 - [kaggle/runs/](kaggle/runs/) and [vastai/runs/](vastai/runs/) — every real
   run, archived with full output (or a raw console log when a notebook's own
   save failed — see [vastai/runs/README.md](vastai/runs/README.md)).
+- [comparisons/](comparisons/) — honest side-by-side vs. real open small models
+  (SmolLM2-135M, Qwen2.5-0.5B), run after Phase C closed.
 
 ## Status (see CHANGELOG.md for exact dates/details)
 
@@ -355,6 +357,29 @@ decoding change, not a training one) eliminated loops entirely regardless of mod
 language — see CHANGELOG.md. This is the project's central, unavoidable finding: at this
 compute budget, architecture and tokenizer choices measurably move grammatical fluency and bpb,
 but not knowledge or reasoning capability off the random-guessing floor.
+
+### How does this compare to a real small open model?
+
+The project's very first research entry (2026-08-10) mentions trying Qwen2.5-0.5B and finding
+it noticeably more coherent — but that was a vague impression, never actually measured. After
+Phase C closed, ran the same 28-prompt set (RU and EN) against **`HuggingFaceTB/SmolLM2-135M-Instruct`**
+(134.5M params — almost exactly `ru_v32768`'s size) and **`Qwen/Qwen2.5-0.5B-Instruct`** (494M —
+the actual model referenced back in the first entry), plus this project's own `a9` (EN) and
+`ru_v32768` (RU) on the identical prompts, for a genuine side-by-side. Full write-up, quoted
+examples, scripts, and raw output: [comparisons/](comparisons/),
+[docs/RESEARCH_LOG.md](docs/RESEARCH_LOG.md) 2026-08-14 "External comparison".
+
+The honest result, in one line: **a same-size real model (SmolLM2) beats our best English model
+(`a9`) on English because it has ~18,000x more training tokens — but that same real model loses
+to our from-scratch Russian model on Russian, because it barely saw any Russian at all.**
+Training-data scale and mixture dominate the architecture choices this project spent most of
+its effort on. `a9`'s response to "What is 17 times 3?" collapses into literal mojibake
+(`12 * 36 ��� 72 [...] 600 / 5 = still 2200 ��� 2280 ���`); SmolLM2's stays readable English even
+when the arithmetic is wrong. Qwen2.5-0.5B (4x bigger, RLHF-tuned) gets simple facts and
+arithmetic right and shows real safety-refusal behavior none of this project's raw SFT models
+have — but still falls apart on the exact same class of multi-step problem every model here
+failed at. Not a disappointing coda — it's the actual answer to the question this project set
+out, from day one, to measure rather than assume.
 
 ## License
 

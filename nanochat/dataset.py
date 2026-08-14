@@ -24,7 +24,14 @@ BASE_URL = "https://huggingface.co/datasets/karpathy/climbmix-400b-shuffle/resol
 MAX_SHARD = 6542 # the last datashard is shard_06542.parquet
 index_to_filename = lambda index: f"shard_{index:05d}.parquet" # format of the filenames
 base_dir = get_base_dir()
-DATA_DIR = os.path.join(base_dir, "base_data_climbmix")
+# NANOCHAT_CORPUS_NAME lets a different corpus (e.g. a non-English one, downloaded by its own
+# script rather than this file's __main__) live in its own DATA_DIR without colliding with the
+# English ClimbMix cache -- defaults to "climbmix" so existing behavior is unchanged. The
+# functions below (list_parquet_files/parquets_iter_batched) only care that DATA_DIR holds
+# *.parquet files with a "text" column; BASE_URL/MAX_SHARD/download_single_file/__main__ below
+# remain ClimbMix-specific and aren't used when populating an alternate corpus directory.
+CORPUS_NAME = os.environ.get("NANOCHAT_CORPUS_NAME", "climbmix")
+DATA_DIR = os.path.join(base_dir, f"base_data_{CORPUS_NAME}")
 
 # -----------------------------------------------------------------------------
 # These functions are useful utilities to other modules, can/should be imported

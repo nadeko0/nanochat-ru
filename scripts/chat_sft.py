@@ -29,6 +29,7 @@ from tasks.common import TaskMixture
 from tasks.gsm8k import GSM8K
 from tasks.mmlu import MMLU
 from tasks.smoltalk import SmolTalk
+from tasks.saiga import SaigaRu
 
 # -----------------------------------------------------------------------------
 # CLI arguments
@@ -64,6 +65,7 @@ parser.add_argument("--chatcore-max-sample", type=int, default=24, help="max pro
 # Data mixture
 parser.add_argument("--mmlu-epochs", type=int, default=3, help="number of epochs of MMLU in training mixture (teaches Multiple Choice)")
 parser.add_argument("--gsm8k-epochs", type=int, default=4, help="number of epochs of GSM8K in training mixture (teaches Math and Tool Use)")
+parser.add_argument("--sft-dataset", type=str, default="smoltalk", choices=["smoltalk", "saiga_ru"], help="primary general-purpose conversational dataset (saiga_ru for the Russian pipeline)")
 args = parser.parse_args()
 user_config = vars(args).copy()
 # -----------------------------------------------------------------------------
@@ -159,18 +161,35 @@ for group in optimizer.param_groups:
     group["initial_lr"] = group["lr"]
 
 # SFT data mixture and DataLoader
+if args.sft_dataset == "smoltalk":
+    primary_train = SmolTalk(split="train") # 460K rows of general conversations
+    primary_val = SmolTalk(split="test") # 24K rows in test set
+else:
+    # SaigaRu has no official train/test split (one split only) -- carve out a 90/10 held-out
+    # slice ourselves via the start/stop slicing tasks.common.Task already supports.
+    _saiga_full = SaigaRu()
+    _saiga_split = int(0.9 * len(_saiga_full))
+    primary_train = SaigaRu(stop=_saiga_split)
+    primary_val = SaigaRu(start=_saiga_split)
+    print0(f"SaigaRu: {len(_saiga_full):,} rows (Russian, filtered) -> {_saiga_split:,} train / {len(_saiga_full) - _saiga_split:,} val")
+
 train_tasks = [
-    SmolTalk(split="train"), # 460K rows of general conversations
+    primary_train,
     *[MMLU(subset="all", split="auxiliary_train") for _ in range(args.mmlu_epochs)], # 100K rows per epoch
     *[GSM8K(subset="main", split="train") for _ in range(args.gsm8k_epochs)], # 8K rows per epoch
 ]
 train_dataset = TaskMixture(train_tasks)
-print0(f"Training mixture: {len(train_dataset):,} rows (MMLU x{args.mmlu_epochs}, GSM8K x{args.gsm8k_epochs})")
-val_dataset = TaskMixture([
-    SmolTalk(split="test"), # 24K rows in test set
-    MMLU(subset="all", split="test", stop=5200), # 14K rows in test set, use only 5.2K to match the train ratios
-    GSM8K(subset="main", split="test", stop=420), # 1.32K rows in test set, use only 420 to match the train ratios
-]) # total: 24K + 5.2K + 0.42K ~= 29.6K rows
+print0(f"Training mixture ({args.sft_dataset}): {len(train_dataset):,} rows (MMLU x{args.mmlu_epochs}, GSM8K x{args.gsm8k_epochs})")
+val_tasks = [primary_val]
+if args.mmlu_epochs > 0 or args.gsm8k_epochs > 0:
+    # Only meaningful alongside the English MMLU/GSM8K auxiliary training this project always
+    # sets to 0 epochs for both smoltalk and saiga_ru runs so far -- kept behind this guard so
+    # a Russian run doesn't silently pull in English-only eval tasks.
+    val_tasks += [
+        MMLU(subset="all", split="test", stop=5200), # 14K rows in test set, use only 5.2K to match the train ratios
+        GSM8K(subset="main", split="test", stop=420), # 1.32K rows in test set, use only 420 to match the train ratios
+    ]
+val_dataset = TaskMixture(val_tasks)
 # DataLoader is defined here, it emits inputs, targets : 2D tensors of shape (device_batch_size, max_seq_len)
 # A big problem is that we don't know the final num_iterations in advance. So we create
 # these two global variables and update them from within the data generator.

@@ -982,6 +982,76 @@ A9's architecture shape, pick the winner via bpb/RuBLiMP, then one full pretrain
 pipeline on the winner** -- cheaper and more informative than either extreme (blind reuse of
 A9's exact config, or re-running the entire English ladder from scratch).
 
+## 2026-08-11 -- Phase B build: real data validated locally before ever renting a GPU
+
+Built the actual code for Phase B (not just researched it) and tested every non-GPU-dependent
+piece against real live data locally, catching real bugs before they'd cost rented-GPU time.
+
+**4th deviation from vendored code**: `nanochat/dataset.py`'s `DATA_DIR` is now
+`base_data_{NANOCHAT_CORPUS_NAME}` (env var, defaults to `"climbmix"` -- zero behavior change
+for every existing English run). `list_parquet_files()`/`parquets_iter_batched()` were already
+generic (just read `*.parquet` files with a `text` column from *some* directory); the only
+ClimbMix-specific parts (`BASE_URL`, `MAX_SHARD`, the `__main__` downloader) are untouched and
+simply unused for a different corpus. This one env var is enough for `tok_train.py`/
+`base_train.py`/`nanochat/dataloader.py` to point at a Russian corpus with **zero further code
+changes** in any of them -- checked by reading their import chains, not assumed.
+
+**Corpus size, checked not guessed**: FineWeb-2's `rus_Cyrl` auto-export parquet shards are
+**~4.84GB each** (verified via a real HTTP HEAD request -- `content-length: 4841277045`), not
+ClimbMix-sized (~40MB). 440 shards exist; this project's whole token budget per run
+(~500-600M tokens) fits comfortably inside 1-2 of them, so `scripts/download_ru_corpus.py`
+(new, not a vendored-code change) defaults to downloading just 2 (1 train + 1 val, mirroring
+`dataset.py`'s own "last shard = val" convention) -- ~9.7GB, still a lot more than ClimbMix's
+footprint, so the next Vast.ai rental needs 50GB+ disk, not the ~16-30GB that sufficed for
+English.
+
+**Tokenizer**: `nanochat/tokenizer.py` needs zero changes (already covered in the planning
+entry above) -- confirmed again here, no new findings, just re-verified nothing regressed.
+
+**SFT dataset, tested against real data**: `IlyaGusev/saiga_scored` filtered to
+`language=="Russian"` and `opus_score>=8` gives **28,237 candidate rows**. Found a real bug
+while testing locally: the dataset uses `"bot"` as the assistant role (not `"assistant"`,
+which `nanochat/tokenizer.py`'s renderer requires literally) -- confirmed by checking the
+actual distinct role values present (`{"user", "system", "bot"}`), not guessed. Normalized
+`"bot"` -> `"assistant"` in the new `tasks/saiga.py`. Also found **39 rows (~0.14%)** start
+directly with an assistant turn (no preceding user message) and can't satisfy the strict
+user/assistant alternation the renderer enforces -- dropped at init rather than left to crash
+a rented-GPU training run mid-epoch. **28,198 rows survive, and every single one round-trips
+through the full validation successfully** (tested exhaustively, not sampled). Added a
+`--sft-dataset` flag to `scripts/chat_sft.py` (default `smoltalk`, `saiga_ru` swaps in this
+new task with a 90/10 in-class held-out split since the source has no official train/test
+split) -- existing English runs are unaffected by default.
+
+**Eval, tested against real data -- and a real bug caught two ways**: `scripts/eval_rublimp.py`
+(new, ported from `eval_blimp.py`'s exact log-prob-comparison method) -- confirmed via a live
+datasets-server row that `source_sentence` is the grammatical original and `target_sentence`
+is the perturbed one (e.g. "плечи" -> "плечники", a nonsense suffix), not assumed from the
+dataset card alone. The category list was first transcribed from the GitHub README's prose
+phenomena list -- **wrong in 2 places**, only caught by actually querying every config: `adp_
+government_case` should be `adposition_government`, `nominalization_cas` should be
+`nominalization_case` (missing an 'e'). Along the way, a second bug surfaced: the script had
+no `if __name__ == "__main__":` guard, so a naive `from scripts.eval_rublimp import
+RUBLIMP_CATEGORIES` (meant to just grab the category list for a validation check) actually
+executed the *entire* eval -- loaded a local `d6` checkpoint and ran a real RuBLiMP pass against
+it, on CPU, using whatever CLI args happened to be live at that moment. Fixed by wrapping the
+whole body in `main()` behind the standard guard. Re-verified the corrected 45-name list
+straight from the dataset's own metadata (`datasets-server.huggingface.co/splits`), not the
+README, and **all 45/45 configs now load real data (1000 pairs each) confirmed** (2 initial
+network blips on retry, not name errors -- both categories loaded fine on a second attempt).
+Also added `--lang ru` to `scripts/eval_repetition.py` -- the existing 10 prompts were
+English-only, and feeding an English-tuned prompt set to a Russian-only model would just
+measure out-of-distribution garbage (this project's own English models already showed exactly
+that failure mode on Russian input, see the 2026-08-10 entry), not a real repetition-loop
+signal.
+
+**Notebook**: `vastai/vastai_train_ru.ipynb` -- downloads the corpus once (shared across a
+vocab_size sweep via symlink, same pattern A9 used for the English corpus), trains both
+16384/32768 tokenizers into isolated base dirs + distinct Drive paths
+(`gdrive:tokenizer_ru_v16384`/`_v32768`, never the shared `gdrive:tokenizer`), pretrains both,
+prints val_bpb + a quick sampled RuBLiMP pass on both base checkpoints, then requires a manual
+`WINNER_VOCAB` decision (deliberately not auto-picked -- same judgment-call policy as A9 vs
+A10) before SFT-ing and fully evaluating the winner only.
+
 ## Open questions / next up
 - Consider a tied-embeddings experiment (`wte`==`lm_head`, A-opt-1): untied
   by upstream design (see `nanochat/gpt.py` docstring). Given A9's clean

@@ -22,7 +22,7 @@ from nanochat.common import compute_init, autodetect_device_type
 from nanochat.checkpoint_manager import load_model
 from nanochat.engine import Engine
 
-PROMPTS = [
+PROMPTS_EN = [
     "hi",
     "What is your name?",
     "Tell me about your day.",
@@ -35,6 +35,23 @@ PROMPTS = [
     "Tell me a short story.",
 ]
 
+# Same 10 prompts, translated -- an English-model-tuned metric fed English prompts against a
+# Russian-only model would just measure out-of-distribution garbage (this project's own
+# English models already showed that failure mode on Russian input, see RESEARCH_LOG.md
+# 2026-08-10), not a real repetition-loop signal for the Russian pipeline.
+PROMPTS_RU = [
+    "привет",
+    "Как тебя зовут?",
+    "Расскажи о своём дне.",
+    "Чем ты любишь заниматься для развлечения?",
+    "Можешь помочь спланировать поездку?",
+    "Какая сегодня погода?",
+    "Опиши свою любимую еду.",
+    "Что ты думаешь о музыке?",
+    "Как приготовить бутерброд?",
+    "Расскажи короткую историю.",
+]
+
 parser = argparse.ArgumentParser(description="Objective repetition-loop metric for chat generation")
 parser.add_argument("-i", "--source", type=str, default="sft", help="sft|base|rl")
 parser.add_argument("-g", "--model-tag", type=str, default=None)
@@ -45,8 +62,10 @@ parser.add_argument("--repetition-penalty", type=float, default=1.0)
 parser.add_argument("--no-repeat-ngram-size", type=int, default=0)
 parser.add_argument("--max-tokens", type=int, default=100)
 parser.add_argument("--seeds", type=int, nargs="+", default=[42, 1, 2])
+parser.add_argument("--lang", type=str, default="en", choices=["en", "ru"], help="prompt language")
 parser.add_argument("--device-type", type=str, default="")
 args = parser.parse_args()
+PROMPTS = PROMPTS_EN if args.lang == "en" else PROMPTS_RU
 
 device_type = autodetect_device_type() if args.device_type == "" else args.device_type
 ddp, ddp_rank, ddp_local_rank, ddp_world_size, device = compute_init(device_type)

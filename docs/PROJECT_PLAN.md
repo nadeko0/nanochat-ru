@@ -109,38 +109,45 @@ reason.
       shape) -- Cyrillic/morphologically-rich languages are a documented
       source of poor tokenizer fertility, so A9's English vocab_size
       finding isn't assumed to transfer. Decide via bpb/RuBLiMP, not by
-      reusing A9's config on faith. See RESEARCH_LOG.md 2026-08-11.
-- [ ] B1. Pick a Russian pretraining corpus. Researched, leaning
-      **`HuggingFaceFW/fineweb-2` config `rus_Cyrl`** (hundreds of billions
-      of tokens, well-documented/actively-maintained pipeline, no Russian
-      equivalent of ClimbMix found to justify deviating) -- not locked in.
-      `CulturaX` ru / HPLT are the fallback candidates. Data volume is a
-      total non-issue at this project's token scale either way. See
-      RESEARCH_LOG.md.
+      reusing A9's config on faith. **Notebook built** (`vastai/vastai_train_ru.ipynb`,
+      Cells 3-6), not run yet -- needs a rented GPU. See RESEARCH_LOG.md 2026-08-11.
+- [ ] B1. Russian pretraining corpus: **decided, `HuggingFaceFW/fineweb-2`
+      config `rus_Cyrl`**. Real sizing checked (not guessed): auto-export
+      parquet shards are ~4.84GB *each* (verified via HTTP HEAD) -- only 2
+      shards (1 train + 1 val) needed for this project's whole token
+      budget. `scripts/download_ru_corpus.py` written for this. Rent 50GB+
+      disk (not the ~16-30GB that sufficed for ClimbMix's much smaller
+      shards). See RESEARCH_LOG.md.
 - [ ] B2. Size the corpus (Chinchilla-style, against A9's architecture
-      shape unless B0 picks a different vocab_size).
+      shape unless B0 picks a different vocab_size) -- happens automatically
+      via `--target-param-data-ratio=20` in the notebook, same as every
+      other run.
 - [ ] B3. Retrain the tokenizer from scratch on the Russian corpus.
-      `nanochat/tokenizer.py`'s `SPLIT_PATTERN` needs **no code changes**
-      -- confirmed it's already Unicode-property-based (`\p{L}`/`\p{N}`),
-      not Latin-only. `nanochat/dataset.py`'s loader is hardcoded to
-      ClimbMix's URL/shard scheme, though -- swapping corpora needs a real
-      code change (4th deviation from vendored code).
+      **Code ready**: `nanochat/tokenizer.py` needed no changes (confirmed
+      Unicode-property-based `SPLIT_PATTERN`, not Latin-only).
+      `nanochat/dataset.py` now reads a `NANOCHAT_CORPUS_NAME` env var
+      (default `"climbmix"`, zero behavior change for existing runs) --
+      this is the 4th deviation from vendored code. `tok_train.py` needed
+      zero further changes once that env var is set.
 - [ ] B4. Pretrain on Russian.
-- [ ] B5. Russian SFT dataset: researched, leaning **`IlyaGusev/saiga_scored`**
-      (41,609 rows, filter to `language=="ru"` + high `opus_score`,
-      actively maintained, used by 130+ models) as the closest analog to
-      SmolTalk's role. `d0rj/ru-instruct` or Vikhr's ruFLAN (~500K) as
-      fallbacks if that's too small after filtering -- though dataset size
-      was never actually the bottleneck for SFT on this project (SmolTalk's
-      460K rows still only produced 32-125 packed steps). See RESEARCH_LOG.md.
+- [ ] B5. Russian SFT dataset: **decided and validated against real data**,
+      `IlyaGusev/saiga_scored` filtered to `language=="Russian"` +
+      `opus_score>=8` -> **28,198 clean rows** (tested exhaustively
+      locally, not sampled -- see RESEARCH_LOG.md for 2 real bugs caught:
+      the dataset uses role `"bot"` not `"assistant"`, and ~0.14% of rows
+      are malformed). New `tasks/saiga.py` + a `--sft-dataset` flag on
+      `scripts/chat_sft.py` (default `smoltalk`, unaffected).
 - [ ] B6. SFT on Russian.
 - [ ] B7. Russian eval stack: val_bpb, **RuBLiMP** (`RussianNLP/rublimp`,
-      a real structural equivalent to BLiMP -- 45 phenomena, ~45K pairs,
-      needs a new loader in a `eval_rublimp.py`-style script, not a
-      rewrite of the log-prob-comparison method) + `eval_repetition.py`
-      (already language-agnostic, no changes needed). **Deliberately
-      skipping chat_eval.py-equivalent tasks (no Russian MMLU/GSM8K
-      chase)** -- English chat_eval floored at 0% regardless of
+      45 phenomena, ~45K pairs total). **`scripts/eval_rublimp.py` written
+      and all 45/45 category configs validated against real data locally**
+      -- caught 2 wrong config names transcribed from the GitHub README
+      (fixed against the dataset's own metadata API instead) and an
+      import-safety bug (the script executed its whole eval as a side
+      effect of being imported, fixed with a `__main__` guard). Plus
+      `eval_repetition.py --lang ru` (new flag, was English-prompts-only).
+      **Deliberately skipping chat_eval.py-equivalent tasks (no Russian
+      MMLU/GSM8K chase)** -- English chat_eval floored at 0% regardless of
       architecture across all four models, a Russian version would almost
       certainly show the same scale-not-language floor, not worth the
       eval time. `chat_rl.py` also skipped for the same reason A7 found

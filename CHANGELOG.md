@@ -5,6 +5,38 @@ for the reasoning/dead-ends behind these changes, [docs/PROJECT_PLAN.md](docs/PR
 for the tracked checklist, and [kaggle/runs/](kaggle/runs/) / [vastai/runs/](vastai/runs/) for
 the full-output notebooks/console logs behind each result.
 
+## 2026-08-11 (cont'd, 7)
+
+- **Phase B built and locally validated against real data** (not just researched -- actual
+  code, tested before ever renting a GPU for it):
+  - **4th deviation from vendored code**: `nanochat/dataset.py`'s `DATA_DIR` now reads a
+    `NANOCHAT_CORPUS_NAME` env var (default `"climbmix"`, zero behavior change for `d4`/`d6`/
+    `a10`/`a9`). `tok_train.py`/`base_train.py`/`dataloader.py` needed no further changes.
+  - Added `scripts/download_ru_corpus.py`: downloads FineWeb-2 `rus_Cyrl` shards. Found via a
+    real HTTP HEAD check that these auto-export shards are ~4.84GB *each* (not ClimbMix-sized
+    ~40MB) -- only 2 needed for this project's token budget, but that's still ~9.7GB, so a
+    Russian run needs 50GB+ rented disk, not the ~16-30GB that sufficed before.
+  - Added `tasks/saiga.py` (`IlyaGusev/saiga_scored` filtered to Russian, quality-scored) and a
+    `--sft-dataset` flag on `scripts/chat_sft.py` (default `smoltalk`, unaffected). Tested
+    exhaustively against real data: 28,237 candidate rows -> found the dataset uses role
+    `"bot"` not `"assistant"` (normalized) and ~0.14% of rows are malformed (dropped at init)
+    -> **28,198 clean rows**, every one verified to round-trip through validation.
+  - Added `scripts/eval_rublimp.py` (RuBLiMP, the real Russian equivalent of BLiMP) --
+    transcribing its 45 category names from the GitHub README's prose list turned out to have
+    2 real errors, only caught by querying every config against the dataset's own metadata API
+    (`adp_government_case` -> `adposition_government`, `nominalization_cas` ->
+    `nominalization_case`). Also fixed an import-safety bug found the same way: the script had
+    no `__main__` guard, so importing anything from it ran the entire eval as a side effect
+    (accidentally triggered a real RuBLiMP pass against a local `d6` checkpoint on CPU while
+    testing). All 45/45 corrected category names now verified against real data.
+  - Added `--lang ru` to `scripts/eval_repetition.py` (was English-prompts-only; feeding
+    English prompts to a Russian-only model would just measure OOD garbage).
+  - Added `vastai/vastai_train_ru.ipynb`: downloads the corpus once, sweeps `vocab_size` in
+    {16384, 32768} at A9's architecture shape (own base dir + Drive path per vocab size, corpus
+    symlinked rather than re-downloaded), requires a manual winner decision from real
+    val_bpb/RuBLiMP (not auto-picked, matching the A9-vs-A10 policy), then SFTs and fully
+    evaluates the winner only. Not run yet -- needs a rented GPU.
+
 ## 2026-08-11 (cont'd, 6)
 
 - **A9 complete — clean sweep, best English model yet.** `--vocab-size=16384 --depth=7`

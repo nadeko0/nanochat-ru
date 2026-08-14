@@ -5,6 +5,25 @@ for the reasoning/dead-ends behind these changes, [docs/PROJECT_PLAN.md](docs/PR
 for the tracked checklist, and [kaggle/runs/](kaggle/runs/) / [vastai/runs/](vastai/runs/) for
 the full-output notebooks/console logs behind each result.
 
+## 2026-08-14 (cont'd)
+
+- **Phase C (project close-out) complete.** Pulled the winning Russian checkpoint
+  (`chatsft_checkpoints/ru_v32768`) and tokenizer locally via `rclone` (already configured on
+  this machine) into `dev-ignore/` (git-ignored, checkpoints don't belong in git) and ran 5 more
+  chat prompts on CPU, deliberately mirroring `d6`'s English spot-check methodology (same prompt
+  categories, temperature=0.6, seed=42) for a directly comparable qualitative result — same
+  fluent-but-empty pattern, no loops, confirming the GPU session's 2-prompt chat test wasn't a
+  fluke. Logged in docs/RESEARCH_LOG.md.
+- Added a closing "Phase C -- closing conclusions" section to docs/RESEARCH_LOG.md: what worked
+  (verify-before-trust discipline, computed-not-guessed sizing, testing the vocab_size
+  assumption instead of reusing it), what didn't (the universal knowledge/reasoning ceiling
+  across every model and both languages, Jupyter's unexplained notebook-save failures, A-opt-1
+  left unanswered), what would be done differently starting over.
+- Checked off C1-C5 in docs/PROJECT_PLAN.md — the entire tracked project checklist (Phases A,
+  B, C) is now complete. Updated README.md's intro/status/evaluation sections accordingly (six
+  models total, both languages, consolidated results tables) so nothing reads as in-progress.
+- No further code changes this entry — Phase C was documentation/verification, not new features.
+
 ## 2026-08-14
 
 - **Phase B (Russian) complete — vocab_size sweep decided the opposite way from English.** Ran

@@ -10,9 +10,13 @@ small number of deliberate, logged modifications (see
 reference.
 
 This is a personal learning/research project, not a production system: the
-goal is to run the full nanochat pipeline (tokenize -> pretrain -> SFT ->
-chat) end to end on free-tier hardware, at a scale small enough to fit that
-hardware, understand every layer of it, and repeat it for Russian.
+goal was to run the full nanochat pipeline (tokenize -> pretrain -> SFT ->
+chat) end to end on free-tier/cheap-rented hardware, at a scale small enough
+to fit that hardware, understand every layer of it, and repeat it for
+Russian. **Both languages are done** — six models trained total (four
+English, two Russian), each pretrained, SFT'd, and evaluated on a
+same-scale eval suite. See [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md) for
+the closed-out checklist.
 
 - [docs/RESEARCH_LOG.md](docs/RESEARCH_LOG.md) — the full, honest experiment
   log, including dead ends and things that didn't work.
@@ -162,8 +166,9 @@ by cell in the box's own Jupyter app, rather than copied cell by cell into a loc
   Vast.ai GPU instead (see below) once that turned out much faster/cheaper than expected. Kept
   around as a Kaggle-only fallback if renting isn't an option.
 
-**Vast.ai** (`a9`, `a10` — rented single GPU, bf16-capable, measured ~9.6x faster pretrain
-than Kaggle T4x2; see [docs/VASTAI_SETUP.md](docs/VASTAI_SETUP.md) for renting/setup):
+**Vast.ai** (`a9`, `a10`, and both Russian models — rented single GPU, bf16-capable, measured
+~9.6x faster pretrain than Kaggle T4x2; see [docs/VASTAI_SETUP.md](docs/VASTAI_SETUP.md) for
+renting/setup):
 
 - [vastai/run_a10.sh](vastai/run_a10.sh) — A10's full pretrain+SFT+quick-eval pipeline as a
   single shell script (used for the actual `a10` pretrain).
@@ -309,7 +314,7 @@ not a language one.
 | **pretrain min val_bpb** | 0.652795 | **0.616911** |
 | base-model CORE metric | 0.0531 | **0.0630** |
 | RuBLiMP, base (sampled 200/category) | 92.36% | **93.19%** |
-| SFT | — (not SFT'd, lost the sweep) | 32/32 steps, 0.42 min |
+| SFT | — (lost the vocab_size sweep, not SFT'd) | 32/32 steps, 0.42 min |
 | **SFT min val_bpb** | — | **0.4785** |
 | distinct-1 / distinct-2 (`--lang ru`) | — | **0.8567 / 0.9717** |
 | repetition loops (of 30) | — | **0/30** |
@@ -329,22 +334,27 @@ fluency. Chat quality itself sits at the same ceiling as every English model: gr
 fluent (Russian-shaped sentences, no repetition loops) but semantically empty or garbled (code/
 HTML fragments mixed into responses that don't answer the actual question) — a scale problem
 that transferred across languages exactly as expected, not something the language swap fixed or
-worsened on its own. Full numbers and methodology: [docs/RESEARCH_LOG.md](docs/RESEARCH_LOG.md)
-2026-08-14; full run archive: [vastai/runs/2026-08-14_ru_vocab_sweep_sft_eval.ipynb](vastai/runs/2026-08-14_ru_vocab_sweep_sft_eval.ipynb).
+worsened on its own. Confirmed a second way: pulled the winning checkpoint locally via `rclone`
+and ran 5 more prompts on CPU (mirroring `d6`'s English spot-check methodology exactly, same
+prompt categories, temperature/seed) — same fluent-but-empty pattern on all 5, no loops. Full
+numbers and methodology: [docs/RESEARCH_LOG.md](docs/RESEARCH_LOG.md) 2026-08-14; full run
+archive: [vastai/runs/2026-08-14_ru_vocab_sweep_sft_eval.ipynb](vastai/runs/2026-08-14_ru_vocab_sweep_sft_eval.ipynb).
 
 Chance baselines: ARC/MMLU 25%, GSM8K/HumanEval 0%, ChatCORE 0, BLiMP/RuBLiMP 50%.
 Full per-run numbers, methodology, and honest interpretation are in
 [docs/RESEARCH_LOG.md](docs/RESEARCH_LOG.md); raw output for every run is in
 [kaggle/runs/](kaggle/runs/) (`d4`/`d6`) and [vastai/runs/](vastai/runs/)
-(`a9`/`a10`).
+(`a9`/`a10`/Russian).
 
-**The short version**: all four models are fluent at the sentence level
-(BLiMP well above chance, grammatically well-formed output in ad hoc chat
-testing) but have essentially no knowledge or reasoning capability (MMLU/
-ARC/GSM8K at or below chance) — a real, measured split, not a guess, that
-held across every architecture variant tried. The repetition-penalty fix
-(a decoding change, not a training one) eliminated loops entirely regardless
-of model size — see CHANGELOG.md.
+**The short version**: all six models (four English, two Russian) are fluent at the
+sentence/paragraph level (BLiMP/RuBLiMP well above chance, grammatically well-formed output in
+ad hoc chat testing across both languages) but have essentially no knowledge or reasoning
+capability (MMLU/ARC/GSM8K at or below chance) — a real, measured split, not a guess, that held
+across every architecture variant *and* both languages tried. The repetition-penalty fix (a
+decoding change, not a training one) eliminated loops entirely regardless of model size or
+language — see CHANGELOG.md. This is the project's central, unavoidable finding: at this
+compute budget, architecture and tokenizer choices measurably move grammatical fluency and bpb,
+but not knowledge or reasoning capability off the random-guessing floor.
 
 ## License
 

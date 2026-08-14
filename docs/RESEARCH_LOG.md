@@ -1131,13 +1131,150 @@ before ever touching a GPU) -- the only genuinely new finding from the GPU run i
 vocab_size decision, which came out opposite to the English case exactly as hypothesized.
 Phase B (B0-B8) is complete.
 
+## 2026-08-14 -- Local CPU spot-check on ru_v32768, mirroring the d6 English methodology exactly
+
+Phase C asked for the Russian model to be checked as thoroughly as the English ones, and one
+thing the English side had that Russian didn't yet: a broader qualitative spot-check beyond the
+2 canned notebook prompts (see the 2026-08-11 "more qualitative d6 chat samples" entry -- 5 new
+English prompts, temperature=0.6, seed=42, local CPU). Reproduced the exact same setup for
+`ru_v32768`, with direct Russian translations of the same 5 prompt *categories* (factual,
+creative, science-explanation, arithmetic, technical-explanation) for a genuinely comparable
+result, not just "also ran some Russian prompts."
+
+Pulled the winner's SFT checkpoint (`chatsft_checkpoints/ru_v32768/model_000032.pt`, 308MB) and
+tokenizer directly from Drive via `rclone` (already configured locally on this machine, same
+`gdrive:` remote used by the rented instances) into `dev-ignore/nanochat_cache_ru_v32768/`
+(git-ignored, not committed -- checkpoints don't belong in git, same policy as everywhere else
+in this project) and ran `scripts/chat_cli.py -i sft -g ru_v32768 --device-type cpu` locally,
+unmodified vendored code, same `chat_cli.py`/`Engine.generate()` used for every other model:
+
+- "Какая столица Франции?" (= "What is the capital of France?") -> never answers "Paris" --
+  instead invents a rambling list of fictional Parisian "administrative and commercial
+  centers," complete with fabricated hotel/airline names and prices ("Aerosa (около $499",
+  "8/10 Airlines Laravel & Airways").
+- "Напиши короткое стихотворение о море." (= "write a poem about the ocean") -> genuinely
+  poem-shaped (short lines, some rhyme-adjacent rhythm), but drifts to "forest" imagery
+  instead of the ocean and rambles about friendship by the end -- same "genre-correct,
+  content-wrong" pattern the English poem prompt showed.
+- "Почему нам нужен сон?" (= "why do we need sleep?") -> plausible-sounding pseudo-science
+  paragraph structure (numbered list, confident tone) that degrades into nonsense phone-number-
+  looking strings standing in for citations/data ("795-81899-0100-1178934 Ночь сна связана...").
+- "Сколько будет 2 плюс 2?" (= "what is 2 plus 2?") -> no actual arithmetic, invents pseudo-
+  mathematical notation and a nonsensical "answer" of 1000 via fabricated formulas -- same
+  complete absence of real math the English `d6` test found ("What is 2 plus 2?" -> incoherent
+  pseudo-math there too).
+- "Объясни просто, как работает компьютер." (= "explain how a computer works, simply") ->
+  starts on-topic then drifts into fabricated shell/Python code fragments (`pip install files
+  file`, `datasets = 3 * 4`) unrelated to the question -- mirrors the SFT chat test's other
+  code-contaminated response from the same session (see the Phase B run entry above).
+
+**No repetition loops in any of the 5** (repetition-penalty fix confirmed working identically
+for Russian, consistent with `eval_repetition --lang ru`'s formal 0/30 result). **Zero factual
+grounding or real reasoning in any of the 5** -- exactly the same fluent-surface/empty-content
+split documented for every English model (`d4` through `a9`) and already summarized from the
+2-prompt GPU chat test. This wasn't a new finding so much as independent confirmation, via a
+completely separate checkpoint pull and a fresh local CPU run, that the GPU session's chat test
+wasn't a fluke of those particular 2 prompts -- the ceiling is real and consistent across 7
+total Russian prompts tested now (2 on GPU + 5 here), matching the English side's own pattern of
+building confidence through repeated spot-checks (2 -> 5 more for `d6`) rather than one sample.
+
+## Phase C -- closing conclusions
+
+Written after both language phases were judged complete, to close the loop the honest-logging
+policy at the top of this file asks for: what worked, what didn't, what would be done
+differently starting over.
+
+**What worked well:**
+
+- **Verify-before-trust, applied consistently, caught real bugs before they cost money.**
+  Every dataset/eval integration (SaigaRu's role bug, RuBLiMP's 2 wrong category names, the
+  import-safety bug) was caught by testing against *real* data locally, before ever spending
+  rented-GPU time -- not once did a Phase B code bug surface during an actual paid GPU session.
+  Compare to Phase A, where real bugs (the `total_batch_size` divisibility issue, the disk-full
+  checkpoint corruption) *did* surface mid-run, because there was no equivalent "test everything
+  offline first" discipline yet -- Phase B's approach was a direct, deliberate response to
+  Phase A's harder lessons, and it paid off (A9/A10's Vast.ai session was ~1.7h of a ~4h rental
+  spent on infra debugging; the Russian session hit exactly one "error" the whole run, and it
+  was an intentional guard, not a bug).
+- **Computing exact numbers (meta-device param counts, measured FLOPs-to-wall-clock ratios)
+  instead of estimating from vibes** made every sizing decision (which depth, which vocab_size,
+  how long a run would take) traceable and mostly accurate in hindsight -- the one estimate that
+  turned out optimistic (A9+A10's combined ~13h estimate vs. Vast.ai's measured ~9-10x speedup
+  making the *actual* combined session ~2.3h of compute) was optimistic in the *useful*
+  direction (rented GPU was faster than free-tier extrapolation suggested), not a costly miss.
+- **Deliberate, logged deviations from vendored code** (4 total: `engine.py`'s repetition
+  controls, `chat_rl.py`'s `--max-train-examples`, `common.py`'s GPU tables, `dataset.py`'s
+  `NANOCHAT_CORPUS_NAME`) stayed genuinely minimal and each solved a real, specific problem --
+  none were speculative "might need this later" additions, and none needed to be reverted.
+- **Testing an assumption instead of reusing a prior result on faith** (the vocab_size sweep)
+  turned out to matter: A9's English vocab_size finding did *not* transfer to Russian, and
+  would have shipped a measurably worse model (val_bpb 0.652795 vs 0.616911, RuBLiMP 92.36% vs
+  93.19%) if `vocab=16384` had just been assumed. The sweep cost about 92 extra minutes of
+  rented GPU time (36.55 + 55.71 min of pretrain vs. running only the winner) -- cheap insurance
+  against a wrong architectural assumption.
+
+**What didn't work / honest limitations:**
+
+- **Every single model trained in this project -- all four English variants and both Russian
+  ones -- shares the same ceiling**: fluent at the sentence/paragraph level, essentially zero
+  reliable factual grounding or reasoning. Bigger params, different vocab allocation, more
+  depth, a different language: none of it moved chat_eval/GSM8K/HumanEval off the
+  random-guessing floor, and RL had nothing to sharpen at that floor. This was expected going in
+  (the free-tier/rented-GPU budget here is many orders of magnitude below what real small
+  open models like Qwen2.5-0.5B or SmolLM2 train on -- 12-18 trillion tokens vs. this project's
+  ~500M-800M per run, see the 2026-08-10 Qwen comparison entry) but is worth restating plainly
+  as the project's central, unavoidable finding: **at this compute budget, architecture and
+  data-language choices measurably affect grammatical fluency and bpb, but not knowledge or
+  reasoning capability.** Nothing tried here was going to change that; nothing should have been
+  expected to.
+- **Jupyter's own notebook-save failed repeatedly during Phase A's Vast.ai sessions**
+  ("database is locked", tied to disk pressure from the checkpoint-retention bug) -- worked
+  around each time by archiving raw console logs instead of fabricating a notebook artifact
+  that didn't actually save, but never root-caused *why* it kept locking. It happened to not
+  recur during the Russian session (the notebook saved cleanly this time), so it's plausibly
+  fixed as a side effect of `vastai/prune_checkpoints.py` keeping disk pressure down -- not
+  confirmed, since it wasn't deliberately tested again.
+- **The tied-embeddings experiment (A-opt-1) was skipped**, a genuine unanswered question left
+  on the table by choice (diminishing-returns judgment call, not a blocker) -- see the Open
+  questions section below and PROJECT_PLAN.md.
+- **No formal ablation isolates *why* smaller vocab helps English but hurts Russian** -- the
+  fertility-based explanation (more wordforms per lemma in a morphologically rich language,
+  documented in the Ukrainian/Kazakh tokenizer papers cited in the Phase B planning entry) is
+  well-supported by outside literature and consistent with the measured result, but this
+  project didn't independently verify it via, say, measuring actual tokens-per-sentence at each
+  vocab_size on held-out Russian text. The *result* (32768 wins) is solid; the *mechanism* is
+  inferred from literature, not independently re-derived here.
+
+**What I'd do differently starting over:**
+
+- Build the "test everything locally against real data before touching a GPU" discipline from
+  day one of Phase A, not discover it as a lesson partway through -- Phase A's disk-full crash
+  and the `total_batch_size` divisibility bugs were exactly the class of thing Phase B's
+  approach was designed to catch earlier.
+- Add checkpoint retention/pruning (`vastai/prune_checkpoints.py`) before the *first* Vast.ai
+  run, not after hitting the disk-full bug twice on A10.
+- Run `eval_repetition.py` against every model in the same session it's trained, rather than
+  adding it to a notebook after the fact (A10 never got this metric filled in during its own
+  session, a gap that's now permanent since re-running it would need re-renting for a
+  no-longer-current architecture comparison).
+
 ## Open questions / next up
-- Consider a tied-embeddings experiment (`wte`==`lm_head`, A-opt-1): untied
-  by upstream design (see `nanochat/gpt.py` docstring). Given A9's clean
-  sweep, should be sized against **`a9`'s budget** (72.35M, `vocab_size=16384`)
-  now that it's the leading architecture, not `d4`'s original 46%-embedding
-  framing -- `a9` is already less embedding-dominated (smaller vocab), so
-  the params freed by tying would be a smaller fraction here than the
-  original `d4` estimate suggested. Not started, not sized yet.
-- Phase 2 (Russian) intentionally deferred until the English side is judged
-  "as done as it's going to get" within the free-tier/rented budget.
+
+Everything tracked in `docs/PROJECT_PLAN.md` (Phases A, B, C) is done as of 2026-08-14. What's
+left is explicitly untracked/deferred, not forgotten:
+
+- Tied-embeddings experiment (`wte`==`lm_head`, A-opt-1): untied by upstream design (see
+  `nanochat/gpt.py` docstring), deliberately skipped as a diminishing-returns stretch item once
+  A9/A10 already answered the two questions that mattered (does architecture reallocation help,
+  and by how much). Would be sized against `a9`'s budget (72.35M, `vocab_size=16384`) if ever
+  picked up, not `d4`'s original 46%-embedding framing.
+- Whether a tied-embeddings experiment or an equivalent question is worth running for the
+  Russian `vocab=32768` winner too -- never sized, since A-opt-1 itself wasn't done for English
+  either.
+- Ideas from post-Phase-B brainstorming, deliberately kept out of the tracked plan and out of
+  git: `dev-ignore/IDEAS.md` has a cheap "just wants to talk" overtraining experiment
+  (depth 10-12, ratio 60-200, ~$1-9), real cost/time numbers for an actual ~1B-param model
+  (~$19-35 on a single rented GPU, Chinchilla-minimal only), and the user's actual stated want
+  (a personal multilingual ru/en/sk domain-narrowed model, from-scratch vs. continued-pretraining
+  existing open weights) -- revisit only if there's appetite to keep going past this project's
+  original "run the full pipeline, understand every layer" scope.

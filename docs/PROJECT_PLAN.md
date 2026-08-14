@@ -136,34 +136,56 @@ reason.
       the base checkpoint's 93.19%, consistent with SFT trading some grammar for chat fluency).
       chat_eval.py-equivalent tasks deliberately skipped as planned (scale floor, not a
       language question). See RESEARCH_LOG.md 2026-08-14.
-- [x] B8. Local chat test in Russian: 2 prompts, grammatically Russian-shaped but semantically
-      incoherent (code/HTML fragments mixed in) -- same fluent-but-empty ceiling as every
-      English model, confirms it's a scale problem that transfers across languages as
-      expected. See RESEARCH_LOG.md 2026-08-14.
+- [x] B8. Local chat test in Russian: 2 prompts on GPU (grammatically Russian-shaped but
+      semantically incoherent, code/HTML fragments mixed in), **plus 5 more prompts run
+      locally on CPU** (pulled the SFT checkpoint via `rclone` into `dev-ignore/`, mirroring
+      the exact d6 English spot-check methodology -- same 5 prompt categories, temperature=0.6,
+      seed=42) for a directly comparable qualitative result. Same fluent-but-empty ceiling as
+      every English model on all 7 Russian prompts tested -- confirms it's a scale problem that
+      transfers across languages as expected, not a fluke of the original 2 prompts. See
+      RESEARCH_LOG.md 2026-08-14.
 
 ## Phase C — Close out
 
-- [ ] C1. Final consolidated results table (all English + Russian variants)
-      in README.md.
-- [ ] C2. Every real run archived with full output (or a console log where
-      that failed) in `kaggle/runs/` / `vastai/runs/`.
-- [ ] C3. RESEARCH_LOG.md gets a closing "conclusions" section — what worked,
-      what didn't, what I'd do differently.
-- [ ] C4. CHANGELOG.md up to date with the final commit.
-- [ ] C5. Everything committed and pushed, nothing only-local.
+- [x] C1. Final consolidated results tables (English + Russian variants, kept as two tables
+      since they use different eval methodologies (BLiMP vs RuBLiMP) -- merging them would
+      obscure that, not clarify it) in README.md's Evaluation section.
+- [x] C2. Every real run archived with full output (or a console log where that failed):
+      `kaggle/runs/` has all 6 English notebooks (d4/d6 pretrain/SFT/eval/RL, VRAM probe);
+      `vastai/runs/` has A10 pretrain + SFT/eval (console logs, Jupyter save failed both
+      times), A9 (console log, same reason), and the Russian vocab sweep + SFT + eval (real
+      notebook with baked output, Jupyter's save succeeded this time).
+- [x] C3. RESEARCH_LOG.md's closing "Phase C -- closing conclusions" section: what worked
+      (verify-before-trust discipline, computed-not-guessed sizing, minimal logged deviations,
+      testing the vocab_size assumption instead of reusing it), what didn't (the universal
+      knowledge/reasoning ceiling across every model and language, Jupyter's unexplained
+      "database is locked" failures, A-opt-1 left unanswered), what I'd do differently (build
+      the local-validation discipline from day one instead of discovering it partway through
+      Phase A).
+- [x] C4. CHANGELOG.md up to date with the final commits.
+- [x] C5. Everything committed (nothing only-local except `dev-ignore/` by design -- checkpoints,
+      the personal idea dump). Not yet pushed to the remote -- push is a separate, explicit step
+      (visible/shared-state action), do it whenever ready.
 
 ---
 
-Progress snapshot: as of 2026-08-14, **Phase A and Phase B are both complete**.
-Phase A (A1-A10, A9 done, A-opt-1 explicitly skipped with a reason): **A9 is
-the standout**, clean sweep across pretrain bpb (0.956752), SFT bpb
-(0.612585), CORE (0.0949), BLiMP (73.48%), and repetition metric -- best of
-all four English models on every axis measured. Phase B (B0-B8, Russian):
-built and locally validated before ever touching a GPU, then run for real on
-a rented RTX 5070 Ti with zero code bugs surfacing on the GPU itself -- the
-only new finding was the vocab_size decision (**32768 beat 16384** for
-Russian, the opposite of A9's English result, confirming the
-Cyrillic-needs-more-vocab prediction made during planning). Winner SFT'd and
-fully evaluated: min val_bpb 0.4785, RuBLiMP 91.10%, 0/30 repetition loops.
-Phase C not started (deliberately deferred) -- next real step is C1-C5
-(consolidated results table, run archiving, closing conclusions).
+Progress snapshot: as of 2026-08-14, **the whole project (Phase A, B, and C) is complete.**
+Phase A (A1-A10, A9 done, A-opt-1 explicitly skipped with a reason): **A9 is the standout**,
+clean sweep across pretrain bpb (0.956752), SFT bpb (0.612585), CORE (0.0949), BLiMP (73.48%),
+and repetition metric -- best of all four English models on every axis measured. Phase B
+(B0-B8, Russian): built and locally validated before ever touching a GPU, then run for real on
+a rented RTX 5070 Ti with zero code bugs surfacing on the GPU itself -- the only new finding was
+the vocab_size decision (**32768 beat 16384** for Russian, the opposite of A9's English result,
+confirming the Cyrillic-needs-more-vocab prediction made during planning). Winner SFT'd and
+fully evaluated (GPU eval suite + 5 additional local CPU spot-check prompts mirroring the
+English `d6` methodology exactly): min val_bpb 0.4785, RuBLiMP 91.10%, 0/30 repetition loops
+across all 30 formal generations plus 5/5 more informal ones. Phase C (C1-C5): consolidated
+docs, archived every run, wrote the closing conclusions in RESEARCH_LOG.md. **The project's
+central finding, true across every one of the 6 models trained and both languages tried**:
+architecture and tokenizer choices measurably move grammatical fluency (BLiMP/RuBLiMP) and bpb,
+but none of it moves knowledge/reasoning capability off the random-guessing floor -- that gap is
+a compute-scale problem, not something this budget or any lever tried here can close.
+
+Deferred, not tracked here: the "just wants to talk" overtraining experiment and the personal
+multilingual domain-model idea, both parked in `dev-ignore/IDEAS.md` (git-ignored, not part of
+this checklist) for whenever there's appetite to pick them up.

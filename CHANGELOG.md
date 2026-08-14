@@ -5,6 +5,30 @@ for the reasoning/dead-ends behind these changes, [docs/PROJECT_PLAN.md](docs/PR
 for the tracked checklist, and [kaggle/runs/](kaggle/runs/) / [vastai/runs/](vastai/runs/) for
 the full-output notebooks/console logs behind each result.
 
+## 2026-08-14
+
+- **Phase B (Russian) complete — vocab_size sweep decided the opposite way from English.** Ran
+  `vastai_train_ru.ipynb` end to end on a rented RTX 5070 Ti; whole notebook checked cell by
+  cell for hidden failures, found none besides the intentional `WINNER_VOCAB` manual-decision
+  guard. `vocab=16384` (72.35M params, same shape as `a9`): min val_bpb 0.652795, CORE 0.0531,
+  RuBLiMP (sampled) 92.36%. `vocab=32768` (122.68M params): min val_bpb **0.616911**, CORE
+  **0.0630**, RuBLiMP (sampled) **93.19%** — **wins on every metric**, opposite to A9's English
+  finding, confirming the Cyrillic-needs-more-vocab prediction from the Phase B planning entry.
+  Winner SFT'd (`saiga_ru`): 32/32 steps, min val_bpb **0.4785**. `eval_repetition --lang ru`:
+  0/30 loops. Full `eval_rublimp.py` (SFT, 45×1000 pairs): **91.10%** — a real regression from
+  the base checkpoint's 93.19%, consistent with SFT trading grammar for chat fluency. Chat
+  quality sits at the same fluent-but-empty ceiling every English model showed. Verified the
+  final SFT checkpoint actually landed on Google Drive directly via the Drive API (not just
+  trusted the sync tool's log). Full breakdown: docs/RESEARCH_LOG.md.
+- Archived the run as a real downloaded notebook (Jupyter's save succeeded this time, unlike
+  A9/A10's "database is locked" failures) at
+  `vastai/runs/2026-08-14_ru_vocab_sweep_sft_eval.ipynb`.
+- Updated README/CHANGELOG/PROJECT_PLAN/RESEARCH_LOG with the real Phase B results (checked off
+  B0-B8), added a "Russian results" table to README.md alongside the existing English one.
+- Added `dev-ignore/IDEAS.md` (git-ignored, not committed) — brainstormed follow-up ideas from
+  this session (a cheap "just wants to talk" overtraining experiment, real ~1B-model cost
+  estimates, a personal multilingual domain-narrowed model) parked for after Phase C.
+
 ## 2026-08-11 (cont'd, 7)
 
 - **Phase B built and locally validated against real data** (not just researched -- actual

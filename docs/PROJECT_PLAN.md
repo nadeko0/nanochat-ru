@@ -105,56 +105,41 @@ reason.
       corner of the design space. Not a time/cost blocker (would've been
       cheap on the same rented GPU), just not judged worth doing.
 
-- [ ] B0. Vocab_size sweep for Russian (16384 vs 32768, A9's architecture
-      shape) -- Cyrillic/morphologically-rich languages are a documented
-      source of poor tokenizer fertility, so A9's English vocab_size
-      finding isn't assumed to transfer. Decide via bpb/RuBLiMP, not by
-      reusing A9's config on faith. **Notebook built** (`vastai/vastai_train_ru.ipynb`,
-      Cells 3-6), not run yet -- needs a rented GPU. See RESEARCH_LOG.md 2026-08-11.
-- [ ] B1. Russian pretraining corpus: **decided, `HuggingFaceFW/fineweb-2`
-      config `rus_Cyrl`**. Real sizing checked (not guessed): auto-export
-      parquet shards are ~4.84GB *each* (verified via HTTP HEAD) -- only 2
-      shards (1 train + 1 val) needed for this project's whole token
-      budget. `scripts/download_ru_corpus.py` written for this. Rent 50GB+
-      disk (not the ~16-30GB that sufficed for ClimbMix's much smaller
-      shards). See RESEARCH_LOG.md.
-- [ ] B2. Size the corpus (Chinchilla-style, against A9's architecture
-      shape unless B0 picks a different vocab_size) -- happens automatically
-      via `--target-param-data-ratio=20` in the notebook, same as every
-      other run.
-- [ ] B3. Retrain the tokenizer from scratch on the Russian corpus.
-      **Code ready**: `nanochat/tokenizer.py` needed no changes (confirmed
-      Unicode-property-based `SPLIT_PATTERN`, not Latin-only).
-      `nanochat/dataset.py` now reads a `NANOCHAT_CORPUS_NAME` env var
-      (default `"climbmix"`, zero behavior change for existing runs) --
-      this is the 4th deviation from vendored code. `tok_train.py` needed
-      zero further changes once that env var is set.
-- [ ] B4. Pretrain on Russian.
-- [ ] B5. Russian SFT dataset: **decided and validated against real data**,
-      `IlyaGusev/saiga_scored` filtered to `language=="Russian"` +
-      `opus_score>=8` -> **28,198 clean rows** (tested exhaustively
-      locally, not sampled -- see RESEARCH_LOG.md for 2 real bugs caught:
-      the dataset uses role `"bot"` not `"assistant"`, and ~0.14% of rows
-      are malformed). New `tasks/saiga.py` + a `--sft-dataset` flag on
-      `scripts/chat_sft.py` (default `smoltalk`, unaffected).
-- [ ] B6. SFT on Russian.
-- [ ] B7. Russian eval stack: val_bpb, **RuBLiMP** (`RussianNLP/rublimp`,
-      45 phenomena, ~45K pairs total). **`scripts/eval_rublimp.py` written
-      and all 45/45 category configs validated against real data locally**
-      -- caught 2 wrong config names transcribed from the GitHub README
-      (fixed against the dataset's own metadata API instead) and an
-      import-safety bug (the script executed its whole eval as a side
-      effect of being imported, fixed with a `__main__` guard). Plus
-      `eval_repetition.py --lang ru` (new flag, was English-prompts-only).
-      **Deliberately skipping chat_eval.py-equivalent tasks (no Russian
-      MMLU/GSM8K chase)** -- English chat_eval floored at 0% regardless of
-      architecture across all four models, a Russian version would almost
-      certainly show the same scale-not-language floor, not worth the
-      eval time. `chat_rl.py` also skipped for the same reason A7 found
-      nothing to sharpen at ~0% baseline.
-- [ ] B8. Local chat test in Russian (also: fix the Windows console
-      UTF-8/cp1252 crash seen earlier — that was a terminal encoding issue,
-      not a model bug).
+- [x] B0. Vocab_size sweep for Russian, both at A9's `depth=7` shape, run for real on a
+      rented RTX 5070 Ti: `vocab=16384` (72.35M params) min val_bpb 0.652795, CORE 0.0531,
+      RuBLiMP (sampled) 92.36%; `vocab=32768` (122.68M params) min val_bpb **0.616911**, CORE
+      **0.0630**, RuBLiMP (sampled) **93.19%**. **`vocab=32768` wins on every metric** -- the
+      *opposite* direction from A9's English result, confirming the fertility-driven
+      prediction from the planning entry (Cyrillic needs more vocab capacity, doesn't transfer
+      from English). See RESEARCH_LOG.md 2026-08-14.
+- [x] B1. Russian pretraining corpus: **`HuggingFaceFW/fineweb-2` config `rus_Cyrl`**, 2 shards
+      (1 train + 1 val, ~9.7GB) downloaded once and shared across the vocab sweep via symlink.
+      See RESEARCH_LOG.md.
+- [x] B2. Corpus sized automatically via `--target-param-data-ratio=20` for both vocab sweep
+      arms (608.2M tokens @ 16384, 775.9M tokens @ 32768).
+- [x] B3. Tokenizers retrained from scratch on the Russian corpus for both vocab sizes (92.76s
+      for the 32768 one, measured), synced to isolated Drive paths
+      (`gdrive:tokenizer_ru_v16384`/`_v32768`), verified there directly via Google Drive.
+- [x] B4. Pretrain on Russian, winner (`vocab=32768`): 2960/2960 steps, 775,946,240 tokens,
+      55.71 min, peak memory 6,294.17MiB, **min val_bpb 0.616911**, CORE 0.0630. See
+      RESEARCH_LOG.md 2026-08-14.
+- [x] B5. Russian SFT dataset: `IlyaGusev/saiga_scored` filtered to `language=="Russian"` +
+      `opus_score>=8` -> **28,198 clean rows** (tested exhaustively locally -- see
+      RESEARCH_LOG.md for 2 real bugs caught: the dataset uses role `"bot"` not `"assistant"`,
+      and ~0.14% of rows are malformed). `tasks/saiga.py` + `--sft-dataset` flag on
+      `scripts/chat_sft.py`.
+- [x] B6. SFT on Russian (`vocab=32768` winner): 32/32 steps, 0.42 min, **min val_bpb 0.4785**.
+      See RESEARCH_LOG.md 2026-08-14.
+- [x] B7. Russian eval stack run in full: `eval_repetition.py --lang ru` (avg distinct-1
+      0.8567, avg distinct-2 0.9717, **0/30 loops**), full `eval_rublimp.py` on the SFT
+      checkpoint (all 45 categories x 1000 pairs, **91.10% overall** -- a real regression from
+      the base checkpoint's 93.19%, consistent with SFT trading some grammar for chat fluency).
+      chat_eval.py-equivalent tasks deliberately skipped as planned (scale floor, not a
+      language question). See RESEARCH_LOG.md 2026-08-14.
+- [x] B8. Local chat test in Russian: 2 prompts, grammatically Russian-shaped but semantically
+      incoherent (code/HTML fragments mixed in) -- same fluent-but-empty ceiling as every
+      English model, confirms it's a scale problem that transfers across languages as
+      expected. See RESEARCH_LOG.md 2026-08-14.
 
 ## Phase C — Close out
 
@@ -169,15 +154,16 @@ reason.
 
 ---
 
-Progress snapshot: as of 2026-08-11, **Phase A is complete** (A1-A10 and
-A9 done, A-opt-1 explicitly skipped with a reason). Both architecture
-experiments ran on a rented Vast.ai RTX 5070 Ti instead of Kaggle (~9.6x
-measured speedup, ~4h total instance rental across both, well under $1).
-**A9 is the standout**: clean sweep across pretrain bpb (0.956752), SFT
-bpb (0.612585), CORE (0.0949), BLiMP (73.48%), and repetition metric --
-best of all four English models on every axis measured. A10 won on
-pretrain bpb/BLiMP but not SFT bpb, a more mixed result. **Phase B
-researched** (corpus/tokenizer/SFT-data/eval candidates picked, see
-RESEARCH_LOG.md 2026-08-11 "Phase B planning research") but not started --
-next real step is renting a GPU and building the notebooks. Phase C not
-started (deliberately deferred).
+Progress snapshot: as of 2026-08-14, **Phase A and Phase B are both complete**.
+Phase A (A1-A10, A9 done, A-opt-1 explicitly skipped with a reason): **A9 is
+the standout**, clean sweep across pretrain bpb (0.956752), SFT bpb
+(0.612585), CORE (0.0949), BLiMP (73.48%), and repetition metric -- best of
+all four English models on every axis measured. Phase B (B0-B8, Russian):
+built and locally validated before ever touching a GPU, then run for real on
+a rented RTX 5070 Ti with zero code bugs surfacing on the GPU itself -- the
+only new finding was the vocab_size decision (**32768 beat 16384** for
+Russian, the opposite of A9's English result, confirming the
+Cyrillic-needs-more-vocab prediction made during planning). Winner SFT'd and
+fully evaluated: min val_bpb 0.4785, RuBLiMP 91.10%, 0/30 repetition loops.
+Phase C not started (deliberately deferred) -- next real step is C1-C5
+(consolidated results table, run archiving, closing conclusions).

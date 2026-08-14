@@ -80,8 +80,13 @@ hardware, understand every layer of it, and repeat it for Russian.
   architecture lever at this scale — see
   [docs/RESEARCH_LOG.md](docs/RESEARCH_LOG.md) for the full honest
   breakdown.
-- **Phase 2 (Russian): deferred** until the English side is judged "done
-  enough" within the free-tier compute budget.
+- **Phase 2 (Russian): done.** Vocab_size sweep (16384 vs 32768, both at A9's `depth=7`
+  architecture shape) run for real on a rented RTX 5070 Ti — **`vocab=32768` won on every
+  metric** (val_bpb, CORE, RuBLiMP), the *opposite* direction from A9's English finding,
+  confirming the plan's prediction that Cyrillic needs more vocab capacity to compress well.
+  Winner SFT'd (`saiga_ru`) and fully evaluated: SFT min val_bpb **0.4785**, `eval_repetition
+  --lang ru` **0/30 loops**, full RuBLiMP (SFT) **91.10%**. Full breakdown below and in
+  [docs/RESEARCH_LOG.md](docs/RESEARCH_LOG.md).
 
 Training happens manually, on either of two backends depending on the run: Kaggle's free T4x2
 (`d4`, `d6`, RL, full eval — bounded by a 12h session limit and ~30 GPU-hours/week free quota)
@@ -93,11 +98,11 @@ checkpoints continuously to Google Drive so a killed session never loses much pr
 
 | | upstream nanochat | this fork |
 |---|---|---|
-| Model size | `--depth=20`..`26` (GPT-2 grade, ~560M-1.9B params) | `d4` (36.70M), `d6` (73.53M), `a10` (87.88M), `a9` (72.35M) all trained; see results below |
-| Hardware | 8x H100 node | Kaggle T4 x2 (free) for `d4`/`d6`; rented single Vast.ai GPU (bf16-capable) for `a9`/`a10` |
+| Model size | `--depth=20`..`26` (GPT-2 grade, ~560M-1.9B params) | `d4` (36.70M), `d6` (73.53M), `a10` (87.88M), `a9` (72.35M), `ru_v16384` (72.35M), `ru_v32768` (122.68M) all trained; see results below |
+| Hardware | 8x H100 node | Kaggle T4 x2 (free) for `d4`/`d6`; rented single Vast.ai GPU (bf16-capable) for `a9`/`a10`/Russian |
 | Session length | single long-running job | resumable across many <=12h Kaggle sessions, or an open-ended rented instance |
 | Checkpoint storage | local disk | synced continuously to Google Drive via rclone |
-| Language | English (ClimbMix) | English first, then a Russian corpus (phase 2) |
+| Language | English (ClimbMix) | English (`d4`/`d6`/`a10`/`a9`), then Russian (FineWeb-2 `rus_Cyrl`, `ru_v16384`/`ru_v32768`) |
 | `Engine.generate()` | temperature + top_k only | + `repetition_penalty` + `no_repeat_ngram_size` (see CHANGELOG.md) |
 | `scripts/chat_rl.py` | full GSM8K train set only | + `--max-train-examples` to bound RL to a subset |
 | Eval tooling | `chat_eval.py` (ARC/MMLU/GSM8K/HumanEval) only | + [`scripts/eval_blimp.py`](scripts/eval_blimp.py), [`scripts/eval_repetition.py`](scripts/eval_repetition.py) |
@@ -170,6 +175,10 @@ than Kaggle T4x2; see [docs/VASTAI_SETUP.md](docs/VASTAI_SETUP.md) for renting/s
   collide with the shared `d4`/`d6`/`a10` tokenizer) -> VRAM probe -> pretrain (with
   [vastai/prune_checkpoints.py](vastai/prune_checkpoints.py) keeping local disk bounded) ->
   SFT -> full eval suite.
+- [vastai/vastai_train_ru.ipynb](vastai/vastai_train_ru.ipynb) — Phase B's (Russian) full
+  pipeline: corpus download (shared once, symlinked into each vocab-size arm) -> vocab_size
+  sweep (16384 vs 32768, both tokenizer + pretrain, isolated base dirs/Drive paths) -> RuBLiMP
+  on both base checkpoints -> manual winner decision -> SFT + full eval on the winner only.
 - [vastai/runs/](vastai/runs/) — archived output for every Vast.ai run (real notebooks where
   Jupyter's own save succeeded, plain console logs where it didn't — see that folder's README
   for why).
@@ -200,29 +209,28 @@ Building the tokenizer (`nanochat/tokenizer.py`, via the `rustbpe` package)
 requires a Rust toolchain; see [rustup.rs](https://rustup.rs/). The Kaggle
 notebook installs this automatically.
 
-## Phase 2: Russian
+## Phase 2: Russian (done)
 
-Planned after phase 1 (English pretrain + SFT + `chat_cli.py` smoke test)
-completes successfully:
+Ran after Phase 1 (English) was judged done enough. What actually happened, vs. the original
+plan below (kept for reference, since most of it held up):
 
-1. Swap the corpus loaded by `nanochat/dataset.py` (currently
-   `karpathy/climbmix-400b-shuffle` parquet shards) for a Russian source —
-   candidates to evaluate: `HuggingFaceFW/fineweb-2` (Russian subset),
-   `uonlp/CulturaX` (`ru`), or a filtered Common Crawl Russian dump.
-2. Size the corpus the same way the English run did:
-   `--target-param-data-ratio=20` with `--depth=4`, which `base_train.py`
-   resolved to 230.7M training tokens (it targets nanochat's own
-   "scaling params" subset — transformer matrices only, excluding
-   embeddings — not the full 36.7M param count naively times 20). Download
-   enough shards to cover that with margin, plus a held-out validation
-   slice.
-3. Retrain the tokenizer (`scripts/tok_train.py`) from scratch on the
-   Russian corpus — Cyrillic text needs its own BPE vocab, not a reused
-   English one. Same isolation lesson as A9 applies if this ever runs
-   alongside an English tokenizer on the same box: use its own
-   `NANOCHAT_BASE_DIR`/Drive path, don't overwrite `gdrive:tokenizer`.
-4. Repeat the training workflow — either backend (Kaggle or a rented GPU,
-   see above) works; which one depends on budget/time at that point.
+1. Corpus: **`HuggingFaceFW/fineweb-2` config `rus_Cyrl`** — the one candidate actually used, no
+   need to fall back to `uonlp/CulturaX` or a raw Common Crawl dump. `nanochat/dataset.py` now
+   reads a `NANOCHAT_CORPUS_NAME` env var (default `"climbmix"`) instead of a hardcoded path —
+   the 4th deliberate deviation from vendored code, zero behavior change when unset.
+2. Corpus sizing: same `--target-param-data-ratio=20` mechanism, but sized against **A9's
+   architecture shape** (`depth=7`) rather than `d4`, since A9 had already become the leading
+   English architecture by the time Phase 2 started — 608.2M/775.9M tokens for the two
+   vocab-sweep arms (see results above), not the originally-planned 230.7M.
+3. Tokenizer: retrained from scratch, **twice** (16384 and 32768, a sweep rather than reusing
+   A9's vocab_size on faith) — Cyrillic needed its own vocab_size decision, not just its own
+   vocab. Each in its own `NANOCHAT_BASE_DIR`/Drive path (`gdrive:tokenizer_ru_v16384`/`_v32768`),
+   confirmed isolated from the shared English `gdrive:tokenizer` via direct Drive inspection.
+4. Ran on a rented Vast.ai RTX 5070 Ti (same backend as A9/A10) — full pipeline, one notebook,
+   see [vastai/vastai_train_ru.ipynb](vastai/vastai_train_ru.ipynb) and the archived run above.
+
+Full results: see the "Russian results" table above and
+[docs/RESEARCH_LOG.md](docs/RESEARCH_LOG.md) 2026-08-14.
 
 ## Evaluation
 
@@ -285,7 +293,46 @@ lever tried: chat_eval/GSM8K/HumanEval sit at the random-guessing floor regardle
 architecture — that gap is a scale problem, not an architecture one. Full reasoning and
 qualitative chat samples: [docs/RESEARCH_LOG.md](docs/RESEARCH_LOG.md).
 
-Chance baselines: ARC/MMLU 25%, GSM8K/HumanEval 0%, ChatCORE 0, BLiMP 50%.
+### Russian results (Phase 2)
+
+Same architecture shape as `a9` (`depth=7`, default aspect_ratio → `model_dim=512`), corpus
+swapped for FineWeb-2 `rus_Cyrl`, SFT data swapped for `saiga_ru`, eval swapped for RuBLiMP (the
+Russian structural equivalent of BLiMP) — `chat_eval`-equivalent (Russian MMLU/GSM8K) tasks
+deliberately skipped, since the English results above already show that gap is a scale problem,
+not a language one.
+
+| | `ru_v16384` | `ru_v32768` (winner) |
+|---|---|---|
+| total params | 72.35M (same as `a9`) | 122.68M |
+| pretrain tokens | 608.2M (2320 steps) | 775.9M (2960 steps) |
+| pretrain wall-clock | 36.55 min | 55.71 min |
+| **pretrain min val_bpb** | 0.652795 | **0.616911** |
+| base-model CORE metric | 0.0531 | **0.0630** |
+| RuBLiMP, base (sampled 200/category) | 92.36% | **93.19%** |
+| SFT | — (not SFT'd, lost the sweep) | 32/32 steps, 0.42 min |
+| **SFT min val_bpb** | — | **0.4785** |
+| distinct-1 / distinct-2 (`--lang ru`) | — | **0.8567 / 0.9717** |
+| repetition loops (of 30) | — | **0/30** |
+| **RuBLiMP, SFT (full 45×1000 pairs)** | — | **91.10%** |
+
+`vocab=32768` beat `vocab=16384` on *every* metric measured — the opposite direction from A9's
+English finding (`vocab=16384` won there). This isn't a contradiction, it's the predicted
+result: Cyrillic/morphologically-rich text is a documented source of poor tokenizer fertility,
+so the embedding-vs-transformer-capacity tradeoff that favored a smaller vocab for English tips
+the other way for Russian. The lesson generalizes: **architecture/tokenizer levers found on one
+language aren't assumed to transfer to another without checking** — the vocab_size sweep existed
+specifically to test that assumption rather than skip straight to reusing A9's config.
+
+SFT dropped RuBLiMP from 93.19% (base, sampled) to 91.10% (SFT, full) — a real, measured
+regression, consistent with SFT trading some pure grammatical competence for chat-format
+fluency. Chat quality itself sits at the same ceiling as every English model: grammatically
+fluent (Russian-shaped sentences, no repetition loops) but semantically empty or garbled (code/
+HTML fragments mixed into responses that don't answer the actual question) — a scale problem
+that transferred across languages exactly as expected, not something the language swap fixed or
+worsened on its own. Full numbers and methodology: [docs/RESEARCH_LOG.md](docs/RESEARCH_LOG.md)
+2026-08-14; full run archive: [vastai/runs/2026-08-14_ru_vocab_sweep_sft_eval.ipynb](vastai/runs/2026-08-14_ru_vocab_sweep_sft_eval.ipynb).
+
+Chance baselines: ARC/MMLU 25%, GSM8K/HumanEval 0%, ChatCORE 0, BLiMP/RuBLiMP 50%.
 Full per-run numbers, methodology, and honest interpretation are in
 [docs/RESEARCH_LOG.md](docs/RESEARCH_LOG.md); raw output for every run is in
 [kaggle/runs/](kaggle/runs/) (`d4`/`d6`) and [vastai/runs/](vastai/runs/)

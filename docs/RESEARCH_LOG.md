@@ -1052,6 +1052,85 @@ prints val_bpb + a quick sampled RuBLiMP pass on both base checkpoints, then req
 `WINNER_VOCAB` decision (deliberately not auto-picked -- same judgment-call policy as A9 vs
 A10) before SFT-ing and fully evaluating the winner only.
 
+## 2026-08-14 -- Phase B run complete: vocab_size sweep decided the opposite way from English, SFT + eval done
+
+Ran `vastai/vastai_train_ru.ipynb` end to end on a newly rented RTX 5070 Ti (same GPU class as
+the A9/A10 session). Full notebook output checked cell by cell for hidden failures (not just
+skimmed) -- exactly one error output in the whole run, and it was the intentional
+`WINNER_VOCAB = None` assertion guard (Cell 6, by design, requires a manual decision, see the
+Phase B build entry above) -- everything else, including all 45/45 RuBLiMP categories on both
+base checkpoints and the full SFT+eval pass, completed with no crashes, no silent bugs.
+
+**Vocab_size sweep, both at A9's `depth=7` architecture shape**:
+
+| | `vocab=16384` | `vocab=32768` |
+|---|---|---|
+| total params | 72,351,976 (identical to `a9`) | 122,683,624 |
+| pretrain steps / tokens | 2320 / 608,174,080 (ratio=20) | 2960 / 775,946,240 (ratio=20) |
+| pretrain wall-clock | 36.55 min | 55.71 min |
+| peak memory | 3,443.53 MiB | 6,294.17 MiB |
+| **min val_bpb** | 0.652795 | **0.616911** |
+| base-model CORE metric | 0.0531 | **0.0630** |
+| RuBLiMP (base, sampled 200/category) | 92.36% | **93.19%** |
+
+**Both metrics agree: `vocab=32768` wins.** This is the *opposite* direction from A9's English
+finding (`vocab=16384` beat `32768` there) -- confirming, not just plausibly supporting, the
+prediction made in the Phase B planning entry above: Cyrillic/morphologically-rich Russian
+needs more vocab capacity to compress well, so the embedding-vs-transformer-capacity tradeoff
+that favored a smaller vocab for English tips the other way for Russian. Worth stating plainly:
+**A9's architecture lever does not transfer across languages by default** -- the vocab_size
+sweep was the right call, not a formality, since blindly reusing `vocab=16384` on faith would
+have shipped the worse of the two options.
+
+`WINNER_VOCAB = 32768` set manually, loser's (`16384`'s) local checkpoints freed per Cell 7 (already
+safely on Drive under `gdrive:base_checkpoints/ru_v16384`, not deleted there, just off the
+rented box's disk).
+
+**SFT** (`saiga_ru`, `IlyaGusev/saiga_scored` filtered to Russian, 25,378 train rows after the
+90/10 split): bestfit-packing exhausted the mixture in **32/32 steps, 0.42 min** -- same
+phenomenon as every English SFT run so far (`d4` 125 steps, `d6`/`a10`/`a9` 32 steps), packing
+efficiency scales with dataset size not language. **Min validation bpb: 0.4785**, peak memory
+4,438.38MiB.
+
+**Chat test** (2 prompts, repetition-penalty fix active): both responses are grammatically
+Russian-shaped but semantically garbage -- code fragments, HTML tags, and invented pseudo-technical
+terms mixed into the output rather than an answer to either prompt ("привет" -> a paragraph
+about a `text-to-value` method mixing Python/JS syntax fragments; "Как тебя зовут?" -> similar
+code-flavored non-answer). Same qualitative ceiling documented for every English model too
+(fluent surface form, no reliable content) -- confirms this is a scale problem that transfers
+across languages exactly as expected, not something SFT-data-language-specific.
+
+**`eval_repetition.py --lang ru`**: avg distinct-1 **0.8567**, avg distinct-2 **0.9717**, **0/30
+generations looped** (worst max-4gram-repeat: 1) -- as clean a result as any English model's,
+confirming the repetition-penalty/no-repeat-ngram fix (`Engine.generate()`, English-agnostic by
+construction) works identically for Russian.
+
+**`eval_rublimp.py`** (full, all 45 categories x 1000 pairs, SFT checkpoint): **91.10% overall**
+-- down from the base checkpoint's 93.19% (sampled) / would-be-full comparison, a real
+regression from SFT, consistent with the general pattern that SFT trades some of the pure
+grammatical competence measured by BLiMP/RuBLiMP for chat-format fluency (not previously
+measurable this cleanly on the English side since `eval_blimp.py` was never run on both base
+*and* SFT checkpoints of the same model to isolate the SFT effect specifically). Category-level
+breakdown mirrors the base model's weak spots almost exactly (`external_possessor` still worst
+at 60.1%, `transitive_verb_object`/`transitive_verb_subject` still the other weak cluster) --
+the SFT regression is a roughly uniform shift, not a specific category collapsing.
+
+**Verified for real, not just trusted from logs**: used the Google Drive MCP tools directly to
+confirm `chatsft_checkpoints/ru_v32768/model_000032.pt` (322,985,075 bytes) actually landed on
+Drive, timestamp matching the local save log to the second -- same "check the actual sync
+target, not just the sync tool's own exit code" policy used earlier in this project's Drive
+verification pass.
+
+Instance rental: not yet closed out with a final duration figure at the time of this entry
+(session still had cleanup/deletion pending) -- will note actual $ cost in a follow-up entry
+once the instance is confirmed deleted, same honest-timing policy as the A9/A10 session.
+
+**Bottom line for Phase B**: the pipeline built and locally-validated in the entry above ran
+on real rented GPU time with zero code bugs surfacing (everything caught was caught locally,
+before ever touching a GPU) -- the only genuinely new finding from the GPU run itself was the
+vocab_size decision, which came out opposite to the English case exactly as hypothesized.
+Phase B (B0-B8) is complete.
+
 ## Open questions / next up
 - Consider a tied-embeddings experiment (`wte`==`lm_head`, A-opt-1): untied
   by upstream design (see `nanochat/gpt.py` docstring). Given A9's clean
